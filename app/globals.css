@@ -1,0 +1,65 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Instrument+Serif&display=swap');
+
+:root {
+  --font-inter: 'Inter', system-ui, sans-serif;
+}
+
+html, body {
+  background: #0a1614;
+  color: #f6f5fc;
+  font-family: var(--font-inter);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: 'cv11', 'ss01';
+}
+
+* { box-sizing: border-box; }
+
+/* Container mobile-first */
+.phone {
+  max-width: 420px;
+  margin: 0 auto;
+  min-height: 100vh;
+  background: linear-gradient(180deg, #0a1614 0%, #0d1f1d 100%);
+  position: relative;
+}
+
+/* Tabular numbers para Grit */
+.tabular { font-variant-numeric: tabular-nums; }
+
+/* Botão grid de opções (estilo mockup) */
+.opt-pill {
+  @apply px-4 py-3 rounded-full border text-sm font-normal transition;
+  @apply bg-surface/40 border-border text-ink;
+}
+.opt-pill:hover { @apply bg-surface/70; }
+.opt-pill.selected {
+  @apply bg-primary text-bg border-primary;
+}
+
+/* Pílula de opção retangular (4 opções) */
+.opt-rect {
+  @apply px-4 py-3.5 rounded-xl border text-sm transition;
+  @apply bg-surface/40 border-border text-ink;
+}
+.opt-rect.selected {
+  @apply bg-primary/15 border-primary text-primary;
+}
+
+/* Esconde scrollbar */
+.no-scroll::-webkit-scrollbar { display: none; }
+.no-scroll { scrollbar-width: none; }
+
+/* Animações sutis */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.4s ease-out; }
+
+@keyframes pulse-ring {
+  0% { stroke-dashoffset: var(--end-offset); }
+}
