@@ -8,60 +8,104 @@ interface Props {
 }
 
 /**
- * Anel circular do Grit. Estilo Oura Ring.
- * Mostra: número grande + label + delta ("↑ +4 hoje").
+ * Grit Ring — peça icônica.
+ *
+ * - Track quase invisível (rgba branco 0.05)
+ * - Progresso mint, stroke fino
+ * - Halo externo soft (filter blur)
+ * - Tipografia ultra-leve, tabular
+ * - Anima entrada via stroke-dashoffset
  */
-export default function GritRing({ score, delta = 0, size = 200, label = 'GRIT' }: Props) {
-  const stroke = 6
-  const radius = (size - stroke) / 2
+export default function GritRing({
+  score,
+  delta = 0,
+  size = 240,
+  label = 'GRIT',
+}: Props) {
+  const stroke = 3.5
+  const radius = (size - stroke - 8) / 2
+  const cx = size / 2
+  const cy = size / 2
   const circumference = 2 * Math.PI * radius
-  // O anel cobre 270° (3/4 da volta), gap de 90° embaixo
-  const arcLength = circumference * 0.75
   const progress = Math.min(100, Math.max(0, score)) / 100
+  const arcLength = circumference // anel completo (mais sereno que 270°)
   const dashOffset = arcLength * (1 - progress)
-  // Rotação para o gap ficar embaixo
-  const rotation = 135 // graus
 
   return (
-    <div className="relative inline-block" style={{ width: size, height: size }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <div
+      className="relative inline-block animate-fade-up"
+      style={{ width: size, height: size }}
+    >
+      {/* Halo externo */}
+      <div
+        aria-hidden
+        className="absolute inset-0 rounded-full pointer-events-none animate-breath"
+        style={{
+          background:
+            'radial-gradient(circle, rgba(184,255,207,0.18) 0%, rgba(184,255,207,0.04) 40%, transparent 70%)',
+          filter: 'blur(14px)',
+        }}
+      />
+
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        className="relative"
+      >
+        <defs>
+          <filter id="grit-glow" x="-30%" y="-30%" width="160%" height="160%">
+            <feGaussianBlur stdDeviation="2.5" result="b" />
+            <feMerge>
+              <feMergeNode in="b" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
         {/* Track */}
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={cx}
+          cy={cy}
           r={radius}
           fill="none"
-          stroke="#1a3835"
+          stroke="rgba(255,255,255,0.06)"
           strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${arcLength} ${circumference}`}
-          transform={`rotate(${rotation} ${size / 2} ${size / 2})`}
         />
+
         {/* Progresso */}
         <circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={cx}
+          cy={cy}
           r={radius}
           fill="none"
-          stroke="#a4dcb5"
+          stroke="#B8FFCF"
           strokeWidth={stroke}
           strokeLinecap="round"
-          strokeDasharray={`${arcLength - dashOffset} ${circumference}`}
-          transform={`rotate(${rotation} ${size / 2} ${size / 2})`}
-          style={{ transition: 'stroke-dasharray 0.8s ease-out' }}
+          strokeDasharray={arcLength}
+          strokeDashoffset={dashOffset}
+          transform={`rotate(-90 ${cx} ${cy})`}
+          filter="url(#grit-glow)"
+          style={{
+            transition: 'stroke-dashoffset 1.4s cubic-bezier(0.16, 1, 0.3, 1)',
+          }}
         />
       </svg>
 
       {/* Centro */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div className="tabular text-6xl font-extralight text-ink leading-none -mt-2">
+        <div
+          className="tabular font-extralight text-ink leading-none"
+          style={{
+            fontSize: size * 0.32,
+            letterSpacing: '-0.04em',
+          }}
+        >
           {score}
         </div>
-        <div className="text-[10px] tracking-[0.25em] text-muted mt-2 font-medium">
-          {label}
-        </div>
+        <div className="eyebrow text-muted mt-3">{label}</div>
         {delta !== 0 && (
-          <div className="absolute -bottom-1 text-[11px] text-primary font-medium tabular">
+          <div className="absolute bottom-[16%] text-[11px] text-primary tabular tracking-wide">
             {delta > 0 ? '↑' : '↓'} {delta > 0 ? '+' : ''}{delta} hoje
           </div>
         )}

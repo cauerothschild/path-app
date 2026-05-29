@@ -4,19 +4,17 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import {
-  gritOfDay,
   gritAccumulated,
   gritDelta,
   bucketFromDate,
-  currentStreak,
-  type DayInput,
+  type CheckInData,
 } from '@/lib/grit'
 import { generateBriefing, homeStatusLine, type Briefing } from '@/lib/briefing'
 import GritRing from '@/components/GritRing'
-import StatusHeader from '@/components/StatusHeader'
-import CheckInPanel from '@/components/CheckInPanel'
+import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
 import Link from 'next/link'
+import Image from 'next/image'
 
 interface CheckInRow {
   id: string
@@ -25,22 +23,22 @@ interface CheckInRow {
   difficulty: 1 | 2 | 3
   failure_reason: string | null
   check_in_time: string
+  execution_time: string | null
 }
 
-export default function Dashboard() {
+export default function Home() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
   const [displayName, setDisplayName] = useState('')
-  const [habitId, setHabitId] = useState('')
   const [gritScore, setGritScore] = useState(0)
   const [delta, setDelta] = useState(0)
   const [briefing, setBriefing] = useState<Briefing | null>(null)
   const [statusLine, setStatusLine] = useState('')
-  const [todayCheckIn, setTodayCheckIn] = useState<CheckInRow | null>(null)
   const [daysActive, setDaysActive] = useState(0)
   const [greeting, setGreeting] = useState('Bom dia')
-  const [appOpenTime] = useState(Date.now())
+  const [riskLevel, setRiskLevel] = useState<'low' | 'moderate' | 'high'>('moderate')
+  const [quickInsight, setQuickInsight] = useState('')
 
   useEffect(() => {
     const h = new Date().getHours()
@@ -83,8 +81,6 @@ export default function Dashboard() {
       return
     }
 
-    setHabitId(habits.id)
-
     const { data: rows } = await supabase
       .from('check_ins')
       .select('*')
@@ -94,36 +90,38 @@ export default function Dashboard() {
       .limit(60)
 
     const history: CheckInRow[] = rows ?? []
-    const today = new Date().toISOString().slice(0, 10)
-    setTodayCheckIn(history.find(r => r.date === today) ?? null)
 
-    // Grit
-    const dayInputs: DayInput[] = []
+    // Grit calculation
+    const dayInputs: CheckInData[] = []
     let runningStreak = 0
     for (const row of history) {
-      const tb = bucketFromDate(new Date(row.check_in_time))
+      const timeToUse = row.execution_time ? new Date(row.execution_time) : new Date(row.check_in_time)
       dayInputs.push({
         executed: row.executed,
         difficulty: row.difficulty,
-        timeBucket: tb,
+        executionTime: row.executed ? timeToUse : null,
         streakBefore: runningStreak,
       })
       runningStreak = row.executed ? runningStreak + 1 : 0
     }
+
     const grit = gritAccumulated(dayInputs)
     setGritScore(grit)
     setDelta(gritDelta(dayInputs))
 
-    // Briefing
+    // Days active
     const daysCount =
       Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
     setDaysActive(daysCount)
 
+    // Briefing
     const briefingHistory = history.map(r => ({
       date: r.date,
       executed: r.executed,
       difficulty: r.difficulty,
-      timeBucket: bucketFromDate(new Date(r.check_in_time)),
+      timeBucket: bucketFromDate(
+        r.execution_time ? new Date(r.execution_time) : new Date(r.check_in_time)
+      ),
       failureReason: r.failure_reason,
     }))
 
@@ -136,6 +134,7 @@ export default function Dashboard() {
       displayName: profile.display_name,
     })
     setBriefing(b)
+
     setStatusLine(
       homeStatusLine({
         history: briefingHistory,
@@ -147,120 +146,119 @@ export default function Dashboard() {
       })
     )
 
-    await supabase.from('daily_context').upsert(
-      {
-        user_id: userId,
-        date: today,
-        first_open_time: new Date().toISOString(),
-      },
-      { onConflict: 'user_id,date', ignoreDuplicates: true }
-    )
+    // Risk level
+    const recentExecutions = history.slice(-7).filter(h => h.executed).length
+    if (recentExecutions >= 6) setRiskLevel('low')
+    else if (recentExecutions >= 4) setRiskLevel('moderate')
+    else setRiskLevel('high')
+
+    // Quick insight
+    const morningCount = history.filter(h => {
+      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
+      return h.executed && t.getHours() < 12
+    }).length
+    const total = history.filter(h => h.executed).length
+    if (total > 0) {
+      const morningRate = Math.round((morningCount / total) * 100)
+      setQuickInsight(
+        `Sua melhor janela de consistência permanece entre 7h e 10h. Taxa: ${morningRate}% dos sucessos.`
+      )
+    }
 
     setLoading(false)
   }
 
-  async function handleCheckIn(data: {
-    executed: boolean
-    difficulty: 1 | 2 | 3
-    failureReason: string | null
-    responseSpeedMs: number
-  }) {
-    const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return
-
-    const today = new Date().toISOString().slice(0, 10)
-    const now = new Date()
-    const tb = bucketFromDate(now)
-
-    const { data: existing } = await supabase
-      .from('check_ins')
-      .select('executed')
-      .eq('user_id', userData.user.id)
-      .eq('habit_id', habitId)
-      .lt('date', today)
-      .order('date', { ascending: true })
-
-    const streakBefore = currentStreak(existing ?? [])
-    const dayGrit = gritOfDay({
-      executed: data.executed,
-      difficulty: data.difficulty,
-      timeBucket: tb,
-      streakBefore,
-    })
-
-    await supabase.from('check_ins').upsert(
-      {
-        user_id: userData.user.id,
-        habit_id: habitId,
-        date: today,
-        executed: data.executed,
-        difficulty: data.difficulty,
-        failure_reason: data.failureReason,
-        check_in_time: now.toISOString(),
-        app_open_time: new Date(appOpenTime).toISOString(),
-        response_speed_ms: data.responseSpeedMs,
-        grit_score: dayGrit,
-      },
-      { onConflict: 'user_id,habit_id,date' }
-    )
-
-    await loadAll()
-  }
-
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted text-sm">
-        carregando...
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-muted">
+        <div className="w-32 text-primary/70">
+          <WavePath variant="loader" />
+        </div>
+        <div className="eyebrow text-subtle">Loading patterns…</div>
       </div>
     )
+  }
+
+  const riskColors = {
+    low: 'bg-success/15 border-success/50 text-success',
+    moderate: 'bg-warn/15 border-warn/50 text-warn',
+    high: 'bg-error/15 border-error/50 text-error',
+  }
+
+  const riskLabels = {
+    low: 'Baixo',
+    moderate: 'Moderado',
+    high: 'Alto',
   }
 
   return (
-    <main className="min-h-screen flex flex-col">
-      <StatusHeader daysObserving={daysActive} />
+    <main className="min-h-screen flex flex-col pb-20 bg-bg relative overflow-hidden">
+      <div className="ambient-glow opacity-30" />
 
-      <div className="px-6 mt-2 mb-6">
-        <h1 className="text-2xl font-light tracking-tight">
-          {greeting}, {displayName.split(' ')[0]}.
-        </h1>
-        <p className="text-sm text-muted mt-1">{statusLine}</p>
-      </div>
+      {/* Header */}
+      <header className="relative z-10 px-5 pt-4 pb-3">
+        <div className="grid grid-cols-3 items-center gap-2">
 
-      {/* Anel do Grit */}
-      <div className="flex justify-center mb-8 mt-2">
-        <GritRing score={gritScore} delta={delta} size={220} />
-      </div>
-
-      {/* Check-in */}
-      <div className="px-6 mb-4">
-        <CheckInPanel
-          appOpenTime={appOpenTime}
-          alreadyChecked={
-            todayCheckIn
-              ? { executed: todayCheckIn.executed, failure_reason: todayCheckIn.failure_reason }
-              : null
-          }
-          onSubmit={handleCheckIn}
-        />
-      </div>
-
-      {/* Atalho para Diagnóstico do dia */}
-      {briefing && (
-        <div className="px-6 mb-6">
-          <Link
-            href="/insights"
-            className="flex items-center justify-between bg-surface/30 border border-border rounded-2xl p-5 hover:bg-surface/50 transition"
-          >
-            <div className="flex-1 pr-3">
-              <div className="text-xs text-muted mb-1">Diagnóstico do dia</div>
-              <div className="text-sm text-ink leading-snug">
-                {briefing.analysisHeadline}
-              </div>
+          {/* Left: symbol + text */}
+          <div className="flex items-center gap-1.5">
+            <div className="relative shrink-0" style={{ width: 20, height: 20 }}>
+              <Image src="/logo-symbol.png" alt="" fill className="object-contain" />
             </div>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-muted">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </Link>
+            <div className="relative" style={{ width: 82, height: 26 }}>
+              <Image src="/logo-text.png" alt="Path" fill className="object-contain object-left" />
+            </div>
+          </div>
+
+          {/* Center: greeting + status */}
+          <div className="text-center">
+            <h1 className="text-[15px] font-medium text-ink leading-tight">
+              {greeting}, {displayName.split(' ')[0]}.
+            </h1>
+            <p className="text-[11px] text-muted mt-0.5 leading-tight">{statusLine}</p>
+          </div>
+
+          {/* Right: days + OBSERVING */}
+          <div className="flex items-center justify-end gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-success shrink-0" />
+            <div className="text-right">
+              <div className="text-[11px] font-medium text-ink tabular leading-none">{daysActive}D</div>
+              <div className="text-[9px] text-muted tracking-[0.12em] mt-0.5">OBSERVING</div>
+            </div>
+          </div>
+
+        </div>
+      </header>
+
+      {/* Grit Ring */}
+      <div className="relative z-10 flex justify-center py-6">
+        <GritRing score={gritScore} delta={delta} size={200} />
+      </div>
+
+      {/* Daily Briefing Card */}
+      {briefing && (
+        <div className="relative z-10 px-6 mb-4">
+          <div className={`border rounded-2xl p-5 ${riskColors[riskLevel]}`}>
+            <div className="text-xs font-medium mb-2 opacity-70">
+              Nível de risco: {riskLabels[riskLevel]}
+            </div>
+            <p className="text-sm leading-relaxed mb-4">{briefing.analysisHeadline}</p>
+            <Link
+              href="/insights"
+              className="inline-block text-xs font-medium border-b opacity-70 hover:opacity-100 transition"
+            >
+              Ver detalhes
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {/* Quick Insight Card */}
+      {quickInsight && (
+        <div className="relative z-10 px-6 mb-4">
+          <div className="bg-surface/30 border border-border rounded-2xl p-5">
+            <div className="text-xs text-muted mb-2">Descoberta comportamental</div>
+            <p className="text-sm text-ink leading-relaxed">{quickInsight}</p>
+          </div>
         </div>
       )}
 

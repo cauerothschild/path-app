@@ -3,13 +3,15 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import Logo from '@/components/Logo'
+import Image from 'next/image'
 
 export default function Home() {
   const [phase, setPhase] = useState<'splash' | 'auth'>('splash')
   const [email, setEmail] = useState('')
-  const [sent, setSent] = useState(false)
+  const [password, setPassword] = useState('')
+  const [isSignUp, setIsSignUp] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
   const [checking, setChecking] = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -37,105 +39,139 @@ export default function Home() {
     return () => clearTimeout(t)
   }, [checking])
 
-  async function handleLogin(e: React.FormEvent) {
+  async function handleAuth(e: React.FormEvent) {
     e.preventDefault()
+    setError('')
     setLoading(true)
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: `${window.location.origin}/onboarding` },
-    })
+
+    if (isSignUp) {
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/onboarding`,
+        },
+      })
+      if (signUpError) {
+        setError(signUpError.message)
+      } else {
+        const { error: loginError } = await supabase.auth.signInWithPassword({ email, password })
+        if (loginError) {
+          setError(loginError.message)
+        } else {
+          router.replace('/onboarding')
+        }
+      }
+    } else {
+      const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+      if (signInError) {
+        setError(signInError.message)
+      } else {
+        const { data: user } = await supabase.auth.getUser()
+        const { data: profile } = await supabase
+          .from('users')
+          .select('onboarding_done')
+          .eq('id', user.user?.id)
+          .single()
+        router.replace(profile?.onboarding_done ? '/dashboard' : '/onboarding')
+      }
+    }
     setLoading(false)
-    if (error) {
-  console.error(error)
-  alert(error.message)
-} else {
-  setSent(true)
-}
   }
 
   if (checking || phase === 'splash') {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden">
-        {/* Onda decorativa atrás */}
-        <svg
-          className="absolute bottom-0 left-0 right-0 opacity-25"
-          viewBox="0 0 400 200"
-          preserveAspectRatio="none"
-          height="200"
-          width="100%"
-        >
-          <path
-            d="M0,120 Q100,80 200,110 T400,90 L400,200 L0,200 Z"
-            fill="url(#wave)"
-          />
-          <path
-            d="M0,140 Q100,100 200,130 T400,120 L400,200 L0,200 Z"
-            fill="url(#wave2)"
-          />
-          <defs>
-            <linearGradient id="wave" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#a4dcb5" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#a4dcb5" stopOpacity="0" />
-            </linearGradient>
-            <linearGradient id="wave2" x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#035147" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#035147" stopOpacity="0" />
-            </linearGradient>
-          </defs>
-        </svg>
+      <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-bg">
+        {/* Glow ambiente — respira sutilmente */}
+        <div
+          aria-hidden
+          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] h-[640px] rounded-full pointer-events-none animate-breath"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(184,255,207,0.10) 0%, rgba(184,255,207,0.03) 38%, transparent 72%)',
+            filter: 'blur(20px)',
+          }}
+        />
 
-        <div className="fade-in text-primary mb-4">
-          <Logo size={72} />
+        {/* Logo: fade-in lento */}
+        <div className="relative z-10 animate-fade-in" style={{ animationDuration: '2s' }}>
+          <div
+            className="relative"
+            style={{ width: 96, height: 96, filter: 'drop-shadow(0 0 24px rgba(184,255,207,0.25))' }}
+          >
+            <Image src="/logo-symbol.png" alt="Path" fill className="object-contain" priority />
+          </div>
         </div>
-        <div className="fade-in text-2xl font-light tracking-[0.4em] text-ink">
-          PATH
-        </div>
-        <div className="absolute bottom-12 text-xs text-muted tracking-widest">
-          Learning your patterns.
+
+        {/* Tagline com fade ainda mais lento */}
+        <div
+          className="absolute bottom-12 eyebrow text-subtle animate-fade-in"
+          style={{ animationDuration: '2s', animationDelay: '0.6s' }}
+        >
+          Learning your patterns
         </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen flex flex-col px-6 py-12">
-      <div className="flex items-center gap-3 mb-16">
-        <div className="text-primary"><Logo size={32} /></div>
-        <span className="text-xl font-light tracking-[0.3em] text-ink">PATH</span>
+    <main className="min-h-screen flex flex-col px-7 py-14 relative overflow-hidden">
+      <div className="ambient-glow opacity-60" />
+
+      <div className="relative z-10 flex justify-center mb-14">
+        <div className="relative" style={{ width: 148, height: 56 }}>
+          <Image src="/logo-full.png" alt="Path" fill className="object-contain" priority />
+        </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center max-w-sm w-full mx-auto">
-        <h1 className="text-3xl font-light leading-tight mb-3">Entrar</h1>
-        <p className="text-sm text-muted mb-8 leading-relaxed">
-          Você não falha aleatoriamente. Você falha sempre nas mesmas condições — esse padrão existe.
+      <div className="relative z-10 flex-1 flex flex-col justify-center max-w-sm w-full mx-auto animate-fade-up">
+        <div className="eyebrow mb-5">{isSignUp ? 'Criar conta' : 'Entrar'}</div>
+        <h1 className="headline-lg mb-6">Você não falha aleatoriamente.</h1>
+        <p className="body mb-10 text-muted">
+          Você falha sempre nas mesmas condições. Esse padrão existe — e é o que vamos observar juntos.
         </p>
 
-        {!sent ? (
-          <form onSubmit={handleLogin} className="space-y-3">
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              placeholder="seu@email.com"
-              className="w-full bg-surface/40 border border-border px-4 py-3.5 rounded-xl text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50 transition"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-primary text-bg font-medium py-3.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-50"
-            >
-              {loading ? 'Enviando...' : 'Continuar'}
-            </button>
-          </form>
-        ) : (
-          <div className="bg-surface/40 border border-primary/30 rounded-xl p-5">
-            <p className="text-sm text-ink mb-1">Link enviado.</p>
-            <p className="text-xs text-muted">
-              Verifique seu email para continuar.
-            </p>
-          </div>
-        )}
+        <form onSubmit={handleAuth} className="space-y-4">
+          <input
+            type="email"
+            required
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            placeholder="seu@email.com"
+            className="input"
+          />
+          <input
+            type="password"
+            required
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="senha"
+            className="input"
+          />
+
+          {error && (
+            <div className="bg-warn/10 border border-warn/40 rounded-xl px-4 py-3">
+              <p className="text-sm text-warn">{error}</p>
+            </div>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="btn btn-primary w-full mt-2"
+          >
+            {loading ? 'Carregando…' : isSignUp ? 'Criar conta' : 'Entrar'}
+            {!loading && <span aria-hidden>→</span>}
+          </button>
+        </form>
+
+        <button
+          onClick={() => { setIsSignUp(!isSignUp); setError('') }}
+          disabled={loading}
+          className="mt-6 text-sm text-muted hover:text-ink2 transition"
+        >
+          {isSignUp ? 'Já tem conta? Entrar' : 'Não tem conta? Criar'}
+        </button>
       </div>
     </main>
   )

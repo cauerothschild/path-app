@@ -3,32 +3,46 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import StatusHeader from '@/components/StatusHeader'
+import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
 
 interface Habit {
   id: string
   name: string
-  preferred_time: 'morning' | 'afternoon' | 'evening'
+  preferred_time: string
   target_duration_min: number
   current_time: string
   current_anchor: string | null
+}
+
+const WINDOW_PRESETS = [
+  { label: 'Manhã', value: '06h - 09h' },
+  { label: 'Tarde', value: '12h - 15h' },
+  { label: 'Noite', value: '18h - 21h' },
+  { label: 'Personalizado', value: 'custom' },
+]
+
+function windowFromHabit(habit: Habit): string {
+  const t = habit.current_time
+  if (!t) return 'Não definida'
+  if (t.includes('-')) return t
+  return t
 }
 
 export default function ProfilePage() {
   const router = useRouter()
   const supabase = createClient()
   const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [editing, setEditing] = useState(false)
   const [habit, setHabit] = useState<Habit | null>(null)
   const [daysActive, setDaysActive] = useState(0)
   const [displayName, setDisplayName] = useState('')
 
-  // Edit form
   const [editName, setEditName] = useState('')
-  const [editTime, setEditTime] = useState('08:00')
-  const [editDuration, setEditDuration] = useState(30)
-  const [editAnchor, setEditAnchor] = useState('')
+  const [selectedPreset, setSelectedPreset] = useState('18h - 21h')
+  const [customWindow, setCustomWindow] = useState('')
+  const [isCustom, setIsCustom] = useState(false)
 
   useEffect(() => {
     load()
@@ -53,7 +67,6 @@ export default function ProfilePage() {
     }
 
     setDisplayName(profile.display_name || '')
-
     const daysCount =
       Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
     setDaysActive(daysCount)
@@ -68,36 +81,57 @@ export default function ProfilePage() {
 
     if (habits) {
       setHabit(habits)
-      setEditName(habits.name)
-      setEditTime(habits.current_time || '08:00')
-      setEditDuration(habits.target_duration_min || 30)
-      setEditAnchor(habits.current_anchor || '')
+      initEditState(habits)
     }
     setLoading(false)
   }
 
+  function initEditState(h: Habit) {
+    setEditName(h.name)
+    const window = windowFromHabit(h)
+    const matchedPreset = WINDOW_PRESETS.find(p => p.value === window && p.value !== 'custom')
+    if (matchedPreset) {
+      setSelectedPreset(matchedPreset.value)
+      setIsCustom(false)
+    } else {
+      setSelectedPreset('custom')
+      setCustomWindow(window !== 'Não definida' ? window : '')
+      setIsCustom(true)
+    }
+  }
+
+  function openEdit() {
+    if (habit) initEditState(habit)
+    setEditing(true)
+  }
+
+  function cancelEdit() {
+    setEditing(false)
+  }
+
+  function getWindowValue(): string {
+    if (isCustom) return customWindow.trim() || 'Não definida'
+    return selectedPreset
+  }
+
   async function saveHabit() {
     if (!habit) return
+    setSaving(true)
+
+    const windowValue = getWindowValue()
     const { error } = await supabase
       .from('habits')
       .update({
-        name: editName,
-        current_time: editTime,
-        target_duration_min: editDuration,
-        current_anchor: editAnchor,
+        name: editName.trim(),
+        current_time: windowValue,
       })
       .eq('id', habit.id)
 
     if (!error) {
-      setHabit({
-        ...habit,
-        name: editName,
-        current_time: editTime,
-        target_duration_min: editDuration,
-        current_anchor: editAnchor,
-      })
+      setHabit({ ...habit, name: editName.trim(), current_time: windowValue })
       setEditing(false)
     }
+    setSaving(false)
   }
 
   async function logout() {
@@ -107,122 +141,122 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center text-muted text-sm">
-        carregando...
+      <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-muted">
+        <div className="w-32 text-primary/70">
+          <WavePath variant="loader" />
+        </div>
+        <div className="eyebrow text-subtle">Carregando…</div>
       </div>
     )
   }
 
+  const hasHabit = !!habit
+  const displayWindow = habit ? windowFromHabit(habit) : 'Não definida'
+
   return (
-    <main className="min-h-screen flex flex-col">
-      <StatusHeader daysObserving={daysActive} />
+    <main className="min-h-screen flex flex-col bg-bg relative overflow-hidden">
+      <div className="ambient-glow opacity-30" />
 
-      <div className="px-6 mt-2 mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-light tracking-tight">Meu Perfil</h1>
-        <button
-          onClick={logout}
-          className="text-muted hover:text-ink transition"
-          aria-label="Configurações"
-        >
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
-            <path
-              d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"
-              stroke="currentColor"
-              strokeWidth="1.4"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
-      </div>
-
-      <div className="px-6 space-y-4 flex-1 overflow-y-auto no-scroll pb-6">
-        {/* Saudação */}
-        <div className="bg-surface/30 border border-border rounded-2xl p-5">
-          <div className="text-xs text-muted mb-1">Você é</div>
-          <div className="text-lg text-ink">{displayName}</div>
-        </div>
-
-        {/* Hábito principal */}
-        <div className="bg-surface/30 border border-border rounded-2xl p-5">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <div className="text-xs text-muted mb-1">Hábito principal</div>
-              <div className="text-lg text-ink">{habit?.name}</div>
-              <div className="text-xs text-muted mt-1">
-                Todos os dias · {habit?.target_duration_min} min
-              </div>
-            </div>
-            <button
-              onClick={() => setEditing(!editing)}
-              className="text-xs bg-primary/15 text-primary border border-primary/40 px-4 py-1.5 rounded-full hover:bg-primary/25 transition"
-            >
-              {editing ? 'Cancelar' : 'Editar'}
-            </button>
+      {/* Header */}
+      <header className="relative z-10 px-6 pt-6 pb-2">
+        <div className="hairline mb-4" />
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="eyebrow mb-0.5">Meu perfil</div>
+            <h1 className="text-xl font-light text-ink">{displayName || '—'}</h1>
           </div>
+          <button
+            onClick={logout}
+            className="text-muted hover:text-ink transition"
+            aria-label="Configurações"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="1.6" />
+              <path
+                d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 0 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 0 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 0 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 0 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 0 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"
+                stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
+      </header>
 
-          {editing ? (
-            <div className="space-y-3 pt-3 border-t border-border">
-              <Field label="Nome do hábito">
-                <input
-                  value={editName}
-                  onChange={e => setEditName(e.target.value)}
-                  className="w-full bg-surface/40 border border-border px-3 py-2 rounded-lg text-sm text-ink focus:outline-none focus:border-primary/50"
-                />
-              </Field>
-              <Field label="Horário">
-                <input
-                  type="time"
-                  value={editTime}
-                  onChange={e => setEditTime(e.target.value)}
-                  className="w-full bg-surface/40 border border-border px-3 py-2 rounded-lg text-sm text-ink focus:outline-none focus:border-primary/50"
-                />
-              </Field>
-              <Field label="Meta (minutos)">
-                <input
-                  type="number"
-                  value={editDuration}
-                  onChange={e => setEditDuration(parseInt(e.target.value) || 30)}
-                  className="w-full bg-surface/40 border border-border px-3 py-2 rounded-lg text-sm text-ink focus:outline-none focus:border-primary/50"
-                />
-              </Field>
-              <Field label="Âncora">
-                <input
-                  value={editAnchor}
-                  onChange={e => setEditAnchor(e.target.value)}
-                  placeholder="Ex: depois do café"
-                  className="w-full bg-surface/40 border border-border px-3 py-2 rounded-lg text-sm text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50"
-                />
-              </Field>
+      <div className="relative z-10 px-6 space-y-4 flex-1 overflow-y-auto no-scroll py-6 pb-24">
+
+        {/* SISTEMA */}
+        <div className="card p-5">
+          <div className="eyebrow mb-4">Sistema</div>
+
+          {hasHabit ? (
+            <>
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] text-muted uppercase tracking-wider mb-1">Comportamento principal</div>
+                  <div className="text-base text-ink">{habit!.name}</div>
+                </div>
+                <div className="hairline" />
+                <div>
+                  <div className="text-[11px] text-muted uppercase tracking-wider mb-1">Janela alvo</div>
+                  <div className="text-base text-ink">{displayWindow}</div>
+                </div>
+              </div>
               <button
-                onClick={saveHabit}
-                className="w-full bg-primary text-bg font-medium py-2.5 rounded-lg hover:bg-primary/90 transition"
+                onClick={openEdit}
+                className="mt-5 w-full flex items-center justify-between text-sm text-muted hover:text-ink transition py-1 group"
               >
-                Salvar
+                <span>Editar comportamento</span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="group-hover:translate-x-0.5 transition-transform">
+                  <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
               </button>
-            </div>
+            </>
           ) : (
-            <div className="grid grid-cols-2 gap-3 pt-3 border-t border-border text-sm">
-              <InfoRow icon="clock" label="Horário atual" value={habit?.current_time || '08:00'} />
-              <InfoRow icon="anchor" label="Âncora atual" value={habit?.current_anchor || '—'} />
-              <InfoRow icon="target" label="Meta atual" value={`${habit?.target_duration_min} min`} />
+            <div className="space-y-4">
+              <div className="space-y-3">
+                <div>
+                  <div className="text-[11px] text-muted uppercase tracking-wider mb-1">Comportamento principal</div>
+                  <div className="text-base text-subtle italic">Não definido</div>
+                </div>
+                <div className="hairline" />
+                <div>
+                  <div className="text-[11px] text-muted uppercase tracking-wider mb-1">Janela alvo</div>
+                  <div className="text-base text-subtle italic">Não definida</div>
+                </div>
+              </div>
+              <button
+                onClick={openEdit}
+                className="w-full bg-primary/15 text-primary border border-primary/40 text-sm font-medium py-2.5 rounded-lg hover:bg-primary/25 transition"
+              >
+                Configurar comportamento
+              </button>
             </div>
           )}
         </div>
 
-        {/* Preferências */}
-        <div className="bg-surface/30 border border-border rounded-2xl p-5">
-          <div className="text-xs text-muted mb-3 uppercase tracking-wider">Preferências</div>
+        {/* OBSERVAÇÃO */}
+        <div className="card p-5">
+          <div className="eyebrow mb-4">Observação</div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted">Janela de calibração</span>
+              <span className="text-sm text-ink">1 / 30 dias</span>
+            </div>
+            <div className="hairline" />
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted">Briefings diários</span>
+              <span className="text-sm text-ink">{daysActive}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* PREFERÊNCIAS */}
+        <div className="card p-5">
+          <div className="eyebrow mb-3">Preferências</div>
           <button className="w-full flex items-center justify-between py-2 text-left">
             <div className="flex items-center gap-3">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-muted">
-                <path
-                  d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.5 0"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
+                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.5 0"
+                  stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
               <div>
                 <div className="text-sm text-ink">Notificações</div>
@@ -235,7 +269,6 @@ export default function ProfilePage() {
           </button>
         </div>
 
-        {/* Sair */}
         <button
           onClick={logout}
           className="w-full text-sm text-muted py-3 hover:text-warn transition"
@@ -243,6 +276,80 @@ export default function ProfilePage() {
           Sair da conta
         </button>
       </div>
+
+      {/* Bottom sheet edit modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={cancelEdit} />
+          <div className="relative bg-[#0d1a19] border-t border-border rounded-t-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-lg font-light text-ink">Editar comportamento</h2>
+              <button onClick={cancelEdit} className="text-muted hover:text-ink transition p-1">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+                </svg>
+              </button>
+            </div>
+
+            <Field label="Comportamento principal">
+              <input
+                value={editName}
+                onChange={e => setEditName(e.target.value)}
+                placeholder="Ex: Treinar"
+                className="w-full bg-surface/40 border border-border px-3 py-2.5 rounded-lg text-sm text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50"
+              />
+            </Field>
+
+            <Field label="Janela alvo">
+              <div className="grid grid-cols-2 gap-2 mb-2">
+                {WINDOW_PRESETS.map(preset => {
+                  const isSelected =
+                    preset.value === 'custom'
+                      ? isCustom
+                      : selectedPreset === preset.value && !isCustom
+                  return (
+                    <button
+                      key={preset.value}
+                      onClick={() => {
+                        if (preset.value === 'custom') {
+                          setIsCustom(true)
+                          setSelectedPreset('custom')
+                        } else {
+                          setIsCustom(false)
+                          setSelectedPreset(preset.value)
+                        }
+                      }}
+                      className={`py-2 px-3 rounded-lg text-sm border transition ${
+                        isSelected
+                          ? 'bg-primary/20 border-primary/50 text-primary'
+                          : 'bg-surface/30 border-border text-muted hover:text-ink'
+                      }`}
+                    >
+                      {preset.value === 'custom' ? 'Personalizado' : `${preset.label} · ${preset.value}`}
+                    </button>
+                  )
+                })}
+              </div>
+              {isCustom && (
+                <input
+                  value={customWindow}
+                  onChange={e => setCustomWindow(e.target.value)}
+                  placeholder="Ex: 18h - 20h"
+                  className="w-full bg-surface/40 border border-border px-3 py-2.5 rounded-lg text-sm text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50 mt-1"
+                />
+              )}
+            </Field>
+
+            <button
+              onClick={saveHabit}
+              disabled={saving || !editName.trim()}
+              className="w-full bg-primary text-bg font-medium py-3 rounded-xl hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              {saving ? 'Salvando...' : 'Salvar alterações'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <BottomNav />
     </main>
@@ -252,7 +359,7 @@ export default function ProfilePage() {
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] text-muted mb-1 uppercase tracking-wider">
+      <label className="block text-[11px] text-muted mb-1.5 uppercase tracking-wider">
         {label}
       </label>
       {children}
@@ -260,31 +367,3 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   )
 }
 
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: 'clock' | 'anchor' | 'target'
-  label: string
-  value: string
-}) {
-  const path =
-    icon === 'clock'
-      ? 'M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z'
-      : icon === 'anchor'
-      ? 'M12 4v16M5 12a7 7 0 0 0 14 0M9 4h6'
-      : 'M12 2v4M12 18v4M2 12h4M18 12h4M12 12m-4 0a4 4 0 1 0 8 0 4 4 0 1 0-8 0'
-
-  return (
-    <div className="flex items-center gap-2">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" className="text-muted shrink-0">
-        <path d={path} stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-      <div className="flex-1 min-w-0">
-        <div className="text-[10px] text-muted uppercase tracking-wider">{label}</div>
-        <div className="text-sm text-ink truncate">{value}</div>
-      </div>
-    </div>
-  )
-}

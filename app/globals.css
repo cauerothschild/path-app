@@ -2,15 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&family=Instrument+Serif&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@200;300;400;500;600;700&display=swap');
 
 :root {
   --font-inter: 'Inter', system-ui, sans-serif;
+  --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::selection {
+  background: rgba(184, 255, 207, 0.25);
+  color: #fff;
 }
 
 html, body {
-  background: #0a1614;
-  color: #f6f5fc;
+  background: #000;
+  color: #f5f7f5;
   font-family: var(--font-inter);
   -webkit-font-smoothing: antialiased;
   font-feature-settings: 'cv11', 'ss01';
@@ -23,43 +29,149 @@ html, body {
   max-width: 420px;
   margin: 0 auto;
   min-height: 100vh;
-  background: linear-gradient(180deg, #0a1614 0%, #0d1f1d 100%);
+  background: #000;
   position: relative;
 }
 
-/* Tabular numbers para Grit */
+/* ───────────────────────────────────────
+   Editorial typography
+   ─────────────────────────────────────── */
+.eyebrow {
+  @apply text-[10px] uppercase tracking-[0.22em] text-muted font-medium;
+}
+.meta-row {
+  @apply flex items-center justify-between text-[10px] uppercase tracking-[0.22em] text-muted font-medium;
+}
+.headline {
+  @apply text-[28px] leading-[1.15] font-light tracking-editorial text-ink;
+}
+.headline-lg {
+  @apply text-[34px] leading-[1.1] font-light tracking-editorial text-ink;
+}
+.body {
+  @apply text-[15px] leading-relaxed text-ink2;
+}
+.kw {
+  color: #B8FFCF;
+  text-underline-offset: 5px;
+  text-decoration: underline;
+  text-decoration-color: rgba(184, 255, 207, 0.4);
+  text-decoration-thickness: 1.5px;
+}
 .tabular { font-variant-numeric: tabular-nums; }
 
-/* Botão grid de opções (estilo mockup) */
+/* ───────────────────────────────────────
+   Surfaces — cards, hairlines
+   ─────────────────────────────────────── */
+.card {
+  @apply rounded-3xl bg-surface;
+  /* sem borda dura: depth via gradiente de luz interna */
+  background-image:
+    radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.025) 0%, transparent 60%),
+    linear-gradient(#0c0c0d, #0c0c0d);
+}
+.card-elevated {
+  @apply rounded-3xl bg-elevated;
+  background-image:
+    radial-gradient(120% 100% at 50% 0%, rgba(255,255,255,0.04) 0%, transparent 60%),
+    linear-gradient(#131315, #131315);
+  box-shadow: 0 1px 0 0 rgba(255,255,255,0.04) inset;
+}
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+.hairline-v {
+  width: 1px;
+  background: linear-gradient(180deg, transparent, rgba(255,255,255,0.08), transparent);
+}
+
+/* ───────────────────────────────────────
+   Buttons
+   ─────────────────────────────────────── */
+.btn {
+  @apply inline-flex items-center justify-center gap-2 select-none font-medium tracking-editorial;
+  @apply rounded-full px-6 py-3.5 text-[15px] transition duration-300;
+  transition-timing-function: var(--ease-premium);
+}
+.btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+.btn-primary {
+  @apply bg-primary text-bg;
+  box-shadow: 0 0 0 0 rgba(184,255,207,0); /* base */
+}
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 0 28px 0 rgba(184,255,207,0.35);
+}
+.btn-primary:active:not(:disabled) {
+  transform: scale(0.985);
+}
+
+.btn-ghost {
+  @apply text-ink;
+  background: rgba(255,255,255,0.04);
+}
+.btn-ghost:hover:not(:disabled) { background: rgba(255,255,255,0.07); }
+.btn-ghost:active:not(:disabled) { transform: scale(0.985); }
+
+.btn-quiet {
+  @apply text-muted text-sm tracking-wide;
+}
+.btn-quiet:hover { @apply text-ink; }
+
+/* ───────────────────────────────────────
+   Pills / option cards (onboarding)
+   ─────────────────────────────────────── */
 .opt-pill {
-  @apply px-4 py-3 rounded-full border text-sm font-normal transition;
-  @apply bg-surface/40 border-border text-ink;
+  @apply px-4 py-3 rounded-full text-sm font-normal text-ink2 transition duration-300;
+  background: rgba(255,255,255,0.03);
+  transition-timing-function: var(--ease-premium);
 }
-.opt-pill:hover { @apply bg-surface/70; }
+.opt-pill:hover {
+  background: rgba(255,255,255,0.06);
+  color: #F2F3F2;
+}
 .opt-pill.selected {
-  @apply bg-primary text-bg border-primary;
+  background: rgba(184,255,207,0.10);
+  color: #B8FFCF;
+  box-shadow: inset 0 0 0 1px rgba(184,255,207,0.45);
 }
 
-/* Pílula de opção retangular (4 opções) */
-.opt-rect {
-  @apply px-4 py-3.5 rounded-xl border text-sm transition;
-  @apply bg-surface/40 border-border text-ink;
+/* ───────────────────────────────────────
+   Inputs
+   ─────────────────────────────────────── */
+.input {
+  @apply w-full bg-transparent px-0 py-3 text-ink text-[17px] font-light transition;
+  border: 0;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  border-radius: 0;
 }
-.opt-rect.selected {
-  @apply bg-primary/15 border-primary text-primary;
+.input::placeholder { color: #3F4543; }
+.input:focus {
+  outline: none;
+  border-bottom-color: #B8FFCF;
 }
 
-/* Esconde scrollbar */
+/* ───────────────────────────────────────
+   Scroll utils
+   ─────────────────────────────────────── */
 .no-scroll::-webkit-scrollbar { display: none; }
 .no-scroll { scrollbar-width: none; }
 
-/* Animações sutis */
-@keyframes fadeIn {
+/* ───────────────────────────────────────
+   Animations (legacy alias kept)
+   ─────────────────────────────────────── */
+.fade-in { animation: fadeUp 0.6s var(--ease-premium) both; }
+@keyframes fadeUp {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
-.fade-in { animation: fadeIn 0.4s ease-out; }
 
-@keyframes pulse-ring {
-  0% { stroke-dashoffset: var(--end-offset); }
+/* Glow ambiente reutilizável */
+.ambient-glow {
+  position: absolute;
+  pointer-events: none;
+  inset: 0;
+  background:
+    radial-gradient(60% 50% at 50% 30%, rgba(184,255,207,0.08) 0%, transparent 70%);
 }

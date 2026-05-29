@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
+import Image from 'next/image'
 
 // Opções pré-definidas dos passos 2-4 (estilo mockup)
 const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar', 'Beber água']
@@ -98,13 +99,33 @@ export default function Onboarding() {
   })()
 
   return (
-    <main className="min-h-screen flex flex-col px-6 pt-12 pb-8">
-      {/* Indicador "1/4" */}
-      <div className="text-sm text-muted mb-12 tabular">
-        {step + 1}/{totalSteps}
+    <main className="min-h-screen flex flex-col px-7 pt-10 pb-7 relative overflow-hidden">
+      <div className="ambient-glow opacity-50" />
+
+      {/* Logo */}
+      <div className="relative z-10 flex justify-center mb-8">
+        <div className="relative" style={{ width: 140, height: 52 }}>
+          <Image src="/logo-full.png" alt="Path" fill className="object-contain" priority />
+        </div>
       </div>
 
-      <div className="flex-1">
+      {/* Header: 0X / 04 · CALIBRATION */}
+      <div className="relative z-10 meta-row mb-2 tabular">
+        <span>{String(step + 1).padStart(2, '0')} / {String(totalSteps).padStart(2, '0')}</span>
+        <span>CALIBRATION</span>
+      </div>
+
+      {/* Wave-progress: indicador de progresso usando a onda assinatura */}
+      <div className="relative z-10 mb-14">
+        <div className="relative h-[1px] bg-white/[0.06]">
+          <div
+            className="absolute left-0 top-0 h-[1px] bg-primary transition-all duration-700 ease-premium"
+            style={{ width: `${((step + 1) / totalSteps) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      <div className="relative z-10 flex-1" key={step}>
         {step === 0 && (
           <StepName
             value={answers.display_name}
@@ -113,8 +134,8 @@ export default function Onboarding() {
         )}
         {step === 1 && (
           <StepChoice
-            title="Qual comportamento você quer tornar inevitável?"
-            hint="Escolha ou escreva o seu."
+            title='Qual comportamento você quer tornar <kw>inevitável?</kw>'
+            hint="Um comportamento. Específico. Repetível."
             options={HABIT_OPTIONS}
             value={answers.target_habit}
             otherValue={otherHabit}
@@ -148,18 +169,25 @@ export default function Onboarding() {
         )}
       </div>
 
-      <div className="space-y-3 mt-8">
+      <div className="relative z-10 space-y-1 mt-8">
         <button
           onClick={next}
           disabled={!canAdvance || saving}
-          className="w-full bg-primary text-bg font-medium py-3.5 rounded-xl hover:bg-primary/90 transition disabled:opacity-30 disabled:cursor-not-allowed"
+          className="btn btn-primary w-full"
         >
-          {saving ? 'Iniciando...' : step === totalSteps - 1 ? 'Finalizar' : 'Continuar'}
+          <span>
+            {saving
+              ? 'Iniciando…'
+              : step === totalSteps - 1
+              ? 'Begin observation'
+              : 'Continue'}
+          </span>
+          {!saving && <span aria-hidden>→</span>}
         </button>
 
         <button
           onClick={step === 0 ? () => router.replace('/') : back}
-          className="w-full text-sm text-muted py-2 hover:text-ink transition"
+          className="w-full btn-quiet py-3"
         >
           {step === 0 ? 'Pular' : 'Voltar'}
         </button>
@@ -172,19 +200,29 @@ export default function Onboarding() {
 // Sub-componentes
 // ============================================
 
+/** Renderiza string com tags <kw>...</kw> como spans com classe .kw (mint sublinhado). */
+function renderTitle(title: string) {
+  const parts = title.split(/(<kw>.*?<\/kw>)/g)
+  return parts.map((p, i) => {
+    const m = p.match(/^<kw>(.*?)<\/kw>$/)
+    if (m) return <span key={i} className="kw">{m[1]}</span>
+    return <span key={i}>{p}</span>
+  })
+}
+
 function StepName({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
-    <div className="fade-in">
-      <h1 className="text-2xl font-light leading-snug mb-2">
-        Como posso<br />te chamar?
-      </h1>
-      <p className="text-sm text-muted mb-10">Ex: Caio, Ana, Rafael</p>
+    <div className="animate-fade-up">
+      <h1 className="headline-lg mb-4">Como posso te chamar?</h1>
+      <p className="body text-muted mb-12">
+        Um nome ajuda a entregar briefings em tom direto.
+      </p>
       <input
         autoFocus
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="Digite seu nome"
-        className="w-full bg-surface/40 border border-border px-4 py-3.5 rounded-xl text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50 transition"
+        className="input"
       />
     </div>
   )
@@ -210,9 +248,9 @@ function StepChoice({
   const isOther = value && !options.includes(value)
 
   return (
-    <div className="fade-in">
-      <h1 className="text-2xl font-light leading-snug mb-2">{title}</h1>
-      <p className="text-sm text-muted mb-8">{hint}</p>
+    <div className="animate-fade-up">
+      <h1 className="headline-lg mb-4">{renderTitle(title)}</h1>
+      <p className="body text-muted mb-10 max-w-md">{hint}</p>
 
       <div className="grid grid-cols-2 gap-2.5 mb-3">
         {options.map(opt => (
@@ -265,9 +303,9 @@ function StepMulti({
   onToggle: (v: string) => void
 }) {
   return (
-    <div className="fade-in">
-      <h1 className="text-2xl font-light leading-snug mb-2">{title}</h1>
-      <p className="text-sm text-muted mb-8">{hint}</p>
+    <div className="animate-fade-up">
+      <h1 className="headline-lg mb-4">{renderTitle(title)}</h1>
+      <p className="body text-muted mb-10 max-w-md">{hint}</p>
 
       <div className="grid grid-cols-2 gap-2.5">
         {options.map(opt => {

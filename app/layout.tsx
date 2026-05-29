@@ -4,6 +4,10 @@ import type { Metadata, Viewport } from 'next'
 export const metadata: Metadata = {
   title: 'Path',
   description: 'Sistema inteligente de performance pessoal.',
+  icons: {
+    icon: '/logo-symbol.png',
+    apple: '/logo-symbol.png',
+  },
 }
 
 export const viewport: Viewport = {
