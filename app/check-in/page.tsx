@@ -90,7 +90,7 @@ export default function CheckInScreen() {
       .eq('user_id', userId)
       .eq('active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (!habits) {
       setLoading(false)
@@ -109,7 +109,7 @@ export default function CheckInScreen() {
     ].join('-')
     setHabitDateStr(hds)
 
-    const windowSrc = habits.current_time || habits.preferred_time || ''
+    const windowSrc = habits.schedule_time || habits.preferred_time || ''
     const parsed = parseWindowStart(windowSrc)
     const label = parsed
       ? `${String(parsed.hours).padStart(2, '0')}:${String(parsed.minutes).padStart(2, '0')}`

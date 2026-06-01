@@ -11,7 +11,7 @@ interface Habit {
   name: string
   preferred_time: string
   target_duration_min: number
-  current_time: string
+  schedule_time: string
   current_anchor: string | null
   target_days: string[] | null
 }
@@ -34,7 +34,7 @@ const WINDOW_PRESETS = [
 ]
 
 function windowFromHabit(habit: Habit): string {
-  const t = habit.current_time
+  const t = habit.schedule_time || habit.preferred_time
   if (!t) return 'Não definida'
   if (t.includes('-')) return t
   return t
@@ -93,7 +93,7 @@ export default function ProfilePage() {
       .eq('user_id', userData.user.id)
       .eq('active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (habits) {
       setHabit(habits)
@@ -138,43 +138,73 @@ export default function ProfilePage() {
   }
 
   async function saveHabit() {
-    if (!habit) return
+    console.log('[SAVE CLICKED]')
+    if (!userId) { console.warn('[SAVE] userId is empty'); return }
+    if (!editName.trim()) return
+
     setSaving(true)
     setSaveError('')
     setSaveSuccess(false)
 
     const windowValue = getWindowValue()
+    console.log('[SAVE DATA]', { habitId: habit?.id, userId, name: editName.trim(), window: windowValue, days: editDays })
 
-    console.log('[saveHabit] userId:', userId)
-    console.log('[saveHabit] habit.id:', habit.id)
-    console.log('[saveHabit] payload:', { name: editName.trim(), current_time: windowValue, preferred_time: windowValue, target_days: editDays })
+    let savedHabit: Habit | null = null
 
-    const { data, error } = await supabase
-      .from('habits')
-      .update({
-        name: editName.trim(),
-        current_time: windowValue,
-        preferred_time: windowValue,
-        target_days: editDays,
-      })
-      .eq('id', habit.id)
-      .eq('user_id', userId)
-      .select()
+    if (habit) {
+      // UPDATE existing habit — only guaranteed columns first
+      const { data: result, error } = await supabase
+        .from('habits')
+        .update({ name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue })
+        .eq('id', habit.id)
+        .eq('user_id', userId)
+        .select()
+        .single()
 
-    console.log('[saveHabit] response data:', data)
-    console.log('[saveHabit] response error:', error)
+      console.log('[SUPABASE UPDATE]', { error, result })
 
-    if (!error) {
-      setHabit({ ...habit, name: editName.trim(), current_time: windowValue, target_days: editDays })
-      setSaveSuccess(true)
-      setTimeout(() => {
-        setEditing(false)
-        setSaveSuccess(false)
-      }, 1000)
+      if (error) {
+        setSaveError(error.message)
+        setSaving(false)
+        return
+      }
+      savedHabit = result as Habit
     } else {
-      setSaveError(error.message || 'Erro ao salvar. Tente novamente.')
+      // INSERT new habit — table was empty
+      const { data: result, error } = await supabase
+        .from('habits')
+        .insert({ user_id: userId, name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue, active: true, target_duration_min: 30 })
+        .select()
+        .single()
+
+      console.log('[SUPABASE INSERT]', { error, result })
+
+      if (error) {
+        setSaveError(error.message)
+        setSaving(false)
+        return
+      }
+      savedHabit = result as Habit
     }
+
+    // Tenta salvar target_days separadamente (falha silenciosa se coluna não existir)
+    const { error: daysErr } = await supabase
+      .from('habits')
+      .update({ target_days: editDays })
+      .eq('id', savedHabit.id)
+      .eq('user_id', userId)
+
+    if (daysErr) {
+      console.warn('[target_days — rode o ALTER TABLE no Supabase]', daysErr.message)
+    }
+
+    setHabit({ ...savedHabit, schedule_time: windowValue, target_days: daysErr ? null : editDays })
+    setSaveSuccess(true)
     setSaving(false)
+    setTimeout(() => {
+      setEditing(false)
+      setSaveSuccess(false)
+    }, 900)
   }
 
   async function logout() {
@@ -424,6 +454,7 @@ export default function ProfilePage() {
             )}
 
             <button
+              type="button"
               onClick={saveHabit}
               disabled={saving || !editName.trim()}
               className="w-full bg-primary text-bg font-medium py-3 rounded-xl hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed"

@@ -108,7 +108,7 @@ export default function Home() {
       .eq('user_id', userId)
       .eq('active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (!habits) {
       setLoading(false)
@@ -116,7 +116,7 @@ export default function Home() {
     }
 
     setHabitName(habits.name)
-    setHabitWindow(habits.current_time || habits.preferred_time || '')
+    setHabitWindow(habits.schedule_time || habits.preferred_time || '')
 
     const { data: rows } = await supabase
       .from('check_ins')
@@ -179,7 +179,7 @@ export default function Home() {
       .eq('user_id', userId)
       .eq('habit_id', habits.id)
       .eq('date', todayStr)
-      .single()
+      .maybeSingle()
     setTodayCheckedIn(!!todayCi)
 
     setLoading(false)

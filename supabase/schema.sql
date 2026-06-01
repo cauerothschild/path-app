@@ -26,7 +26,7 @@ create table if not exists public.habits (
   name text not null,
   preferred_time text default 'morning',
   target_duration_min integer default 30,
-  current_time text default '08:00',
+  schedule_time text,
   current_anchor text,
   target_days text[],
   created_at timestamptz default now(),

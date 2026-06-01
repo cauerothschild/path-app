@@ -61,7 +61,7 @@ export default function InsightsScreen() {
       .eq('user_id', userId)
       .eq('active', true)
       .limit(1)
-      .single()
+      .maybeSingle()
 
     if (!habits) {
       setLoading(false)
