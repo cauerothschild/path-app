@@ -99,7 +99,7 @@ export default function Home() {
             className="relative"
             style={{ width: 96, height: 96, filter: 'drop-shadow(0 0 24px rgba(184,255,207,0.25))' }}
           >
-            <Image src="/logo-symbol.png" alt="Path" fill className="object-contain" priority />
+            <Image src="/logo-symbol.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
           </div>
         </div>
 
@@ -120,7 +120,7 @@ export default function Home() {
 
       <div className="relative z-10 flex justify-center mb-14">
         <div className="relative" style={{ width: 148, height: 56 }}>
-          <Image src="/logo-full.png" alt="Path" fill className="object-contain" priority />
+          <Image src="/logo-full.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
         </div>
       </div>
 

@@ -5,9 +5,24 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
 
-// Opções pré-definidas dos passos 2-4 (estilo mockup)
 const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar', 'Beber água']
-const ANCHOR_OPTIONS = ['Tomar café', 'Escovar os dentes', 'Abrir o notebook', 'Chegar em casa', 'Tomar banho']
+
+const WINDOW_PRESETS = [
+  { label: 'Manhã', value: '06h - 09h' },
+  { label: 'Tarde', value: '12h - 15h' },
+  { label: 'Noite', value: '18h - 21h' },
+]
+
+const WEEK_DAYS = [
+  { key: 'Dom', label: 'D' },
+  { key: 'Seg', label: 'S' },
+  { key: 'Ter', label: 'T' },
+  { key: 'Qua', label: 'Q' },
+  { key: 'Qui', label: 'Q' },
+  { key: 'Sex', label: 'S' },
+  { key: 'Sáb', label: 'S' },
+]
+
 const OBSTACLE_OPTIONS = [
   'Cansaço',
   'Falta de tempo',
@@ -24,7 +39,8 @@ const OBSTACLE_OPTIONS = [
 interface Answers {
   display_name: string
   target_habit: string
-  daily_anchor: string
+  target_window: string
+  target_days: string[]
   main_obstacles: string[]
 }
 
@@ -33,11 +49,11 @@ export default function Onboarding() {
   const [answers, setAnswers] = useState<Answers>({
     display_name: '',
     target_habit: '',
-    daily_anchor: '',
+    target_window: '',
+    target_days: [],
     main_obstacles: [],
   })
   const [otherHabit, setOtherHabit] = useState('')
-  const [otherAnchor, setOtherAnchor] = useState('')
   const [saving, setSaving] = useState(false)
   const router = useRouter()
   const supabase = createClient()
@@ -61,7 +77,6 @@ export default function Onboarding() {
     await supabase.from('users').update({
       display_name: answers.display_name.trim(),
       target_habit: answers.target_habit,
-      daily_anchor: answers.daily_anchor,
       main_obstacles: answers.main_obstacles,
       onboarding_done: true,
     }).eq('id', userData.user.id)
@@ -69,9 +84,8 @@ export default function Onboarding() {
     await supabase.from('habits').insert({
       user_id: userData.user.id,
       name: answers.target_habit,
-      preferred_time: 'morning',
-      current_time: '08:00',
-      current_anchor: answers.daily_anchor,
+      preferred_time: answers.target_window,
+      current_time: answers.target_window,
       target_duration_min: 30,
       active: true,
     })
@@ -92,7 +106,7 @@ export default function Onboarding() {
     switch (step) {
       case 0: return answers.display_name.trim().length > 0
       case 1: return answers.target_habit.length > 0
-      case 2: return answers.daily_anchor.length > 0
+      case 2: return answers.target_window.length > 0
       case 3: return answers.main_obstacles.length > 0
       default: return false
     }
@@ -105,7 +119,7 @@ export default function Onboarding() {
       {/* Logo */}
       <div className="relative z-10 flex justify-center mb-8">
         <div className="relative" style={{ width: 140, height: 52 }}>
-          <Image src="/logo-full.png" alt="Path" fill className="object-contain" priority />
+          <Image src="/logo-full.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
         </div>
       </div>
 
@@ -144,14 +158,11 @@ export default function Onboarding() {
           />
         )}
         {step === 2 && (
-          <StepChoice
-            title="O que você já faz todos os dias sem pensar?"
-            hint="Isso vai nos ajudar a te ancorar."
-            options={ANCHOR_OPTIONS}
-            value={answers.daily_anchor}
-            otherValue={otherAnchor}
-            onOther={setOtherAnchor}
-            onSelect={v => setAnswers({ ...answers, daily_anchor: v })}
+          <StepSchedule
+            window={answers.target_window}
+            days={answers.target_days}
+            onWindowChange={v => setAnswers({ ...answers, target_window: v })}
+            onDaysChange={v => setAnswers({ ...answers, target_days: v })}
           />
         )}
         {step === 3 && (
@@ -224,6 +235,85 @@ function StepName({ value, onChange }: { value: string; onChange: (v: string) =>
         placeholder="Digite seu nome"
         className="input"
       />
+    </div>
+  )
+}
+
+function StepSchedule({
+  window: selectedWindow,
+  days,
+  onWindowChange,
+  onDaysChange,
+}: {
+  window: string
+  days: string[]
+  onWindowChange: (v: string) => void
+  onDaysChange: (v: string[]) => void
+}) {
+  const [customActive, setCustomActive] = useState(false)
+  const [customValue, setCustomValue] = useState('')
+
+  function toggleDay(key: string) {
+    const set = new Set(days)
+    if (set.has(key)) set.delete(key); else set.add(key)
+    onDaysChange(Array.from(set))
+  }
+
+  return (
+    <div className="animate-fade-up">
+      <h1 className="headline-lg mb-4">
+        Quais horários você quer <span className="kw">realizar seu hábito?</span>
+      </h1>
+      <p className="body text-muted mb-10">Escolha a janela que melhor encaixa na sua rotina.</p>
+
+      <div className="space-y-2 mb-8">
+        {WINDOW_PRESETS.map(p => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => { setCustomActive(false); onWindowChange(p.value) }}
+            className={`opt-pill w-full text-left ${selectedWindow === p.value && !customActive ? 'selected' : ''}`}
+          >
+            <span className="font-medium">{p.label}</span>
+            <span className="ml-2 opacity-60">{p.value}</span>
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => { setCustomActive(true); onWindowChange(customValue || ' ') }}
+          className={`opt-pill w-full text-left ${customActive ? 'selected' : ''}`}
+        >
+          {customActive ? (
+            <input
+              autoFocus
+              value={customValue}
+              onChange={e => { setCustomValue(e.target.value); onWindowChange(e.target.value) }}
+              placeholder="Ex: 07h - 08h"
+              className="bg-transparent outline-none w-full text-inherit placeholder:text-bg/50"
+            />
+          ) : (
+            'Personalizado'
+          )}
+        </button>
+      </div>
+
+      <p className="text-[11px] text-muted uppercase tracking-wider mb-3">Dias da semana (opcional)</p>
+      <div className="flex gap-2">
+        {WEEK_DAYS.map(d => (
+          <button
+            key={d.key}
+            type="button"
+            onClick={() => toggleDay(d.key)}
+            className={`flex-1 py-2.5 rounded-lg text-xs font-medium border transition ${
+              days.includes(d.key)
+                ? 'bg-primary/20 border-primary/50 text-primary'
+                : 'bg-surface/30 border-border text-muted hover:text-ink'
+            }`}
+          >
+            {d.label}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }

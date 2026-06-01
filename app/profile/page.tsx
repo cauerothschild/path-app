@@ -43,6 +43,8 @@ export default function ProfilePage() {
   const [selectedPreset, setSelectedPreset] = useState('18h - 21h')
   const [customWindow, setCustomWindow] = useState('')
   const [isCustom, setIsCustom] = useState(false)
+  const [saveError, setSaveError] = useState('')
+  const [userId, setUserId] = useState('')
 
   useEffect(() => {
     load()
@@ -66,6 +68,7 @@ export default function ProfilePage() {
       return
     }
 
+    setUserId(userData.user.id)
     setDisplayName(profile.display_name || '')
     const daysCount =
       Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
@@ -117,6 +120,7 @@ export default function ProfilePage() {
   async function saveHabit() {
     if (!habit) return
     setSaving(true)
+    setSaveError('')
 
     const windowValue = getWindowValue()
     const { error } = await supabase
@@ -124,12 +128,16 @@ export default function ProfilePage() {
       .update({
         name: editName.trim(),
         current_time: windowValue,
+        preferred_time: windowValue,
       })
       .eq('id', habit.id)
+      .eq('user_id', userId)
 
     if (!error) {
       setHabit({ ...habit, name: editName.trim(), current_time: windowValue })
       setEditing(false)
+    } else {
+      setSaveError(error.message || 'Erro ao salvar. Tente novamente.')
     }
     setSaving(false)
   }
@@ -339,6 +347,10 @@ export default function ProfilePage() {
                 />
               )}
             </Field>
+
+            {saveError && (
+              <p className="text-xs text-error px-1">{saveError}</p>
+            )}
 
             <button
               onClick={saveHabit}

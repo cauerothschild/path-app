@@ -9,11 +9,9 @@ import {
   bucketFromDate,
   type CheckInData,
 } from '@/lib/grit'
-import { generateBriefing, homeStatusLine, type Briefing } from '@/lib/briefing'
 import GritRing from '@/components/GritRing'
 import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
-import Link from 'next/link'
 import Image from 'next/image'
 
 interface CheckInRow {
@@ -26,6 +24,41 @@ interface CheckInRow {
   execution_time: string | null
 }
 
+const DAY_NAMES_PT = ['Domingos', 'Segundas', 'Terças', 'Quartas', 'Quintas', 'Sextas', 'Sábados']
+
+function buildBriefingMsg(history: CheckInRow[]): string {
+  if (history.length === 0)
+    return 'Hoje é uma oportunidade de reforçar sua consistência.'
+
+  const yesterday = history[history.length - 1]
+  if (!yesterday.executed)
+    return 'Ontem não saiu como planejado. O objetivo hoje é apenas retomar.'
+
+  const todayDay = new Date().getDay()
+  const sameDayHistory = history.filter(h => new Date(h.date).getDay() === todayDay)
+  if (sameDayHistory.length >= 2) {
+    const failRate = sameDayHistory.filter(h => !h.executed).length / sameDayHistory.length
+    if (failRate > 0.5)
+      return `${DAY_NAMES_PT[todayDay]} costumam ser mais difíceis para você.`
+  }
+
+  const recent = history.slice(-5)
+  const successes = recent.filter(h => h.executed).length
+  if (successes >= 4)
+    return `Você completou seu hábito em ${successes} dos últimos ${recent.length} dias.`
+
+  return 'Hoje é uma oportunidade de reforçar sua consistência.'
+}
+
+function formatWindowStart(timeStr: string): string {
+  if (!timeStr) return ''
+  const h = timeStr.match(/(\d{1,2})h/)
+  if (h) return `${String(parseInt(h[1])).padStart(2, '0')}:00`
+  const c = timeStr.match(/(\d{2}):(\d{2})/)
+  if (c) return c[0]
+  return timeStr
+}
+
 export default function Home() {
   const router = useRouter()
   const supabase = createClient()
@@ -33,12 +66,13 @@ export default function Home() {
   const [displayName, setDisplayName] = useState('')
   const [gritScore, setGritScore] = useState(0)
   const [delta, setDelta] = useState(0)
-  const [briefing, setBriefing] = useState<Briefing | null>(null)
-  const [statusLine, setStatusLine] = useState('')
   const [daysActive, setDaysActive] = useState(0)
   const [greeting, setGreeting] = useState('Bom dia')
-  const [riskLevel, setRiskLevel] = useState<'low' | 'moderate' | 'high'>('moderate')
-  const [quickInsight, setQuickInsight] = useState('')
+  const [statusLine, setStatusLine] = useState('')
+  const [habitName, setHabitName] = useState('')
+  const [habitWindow, setHabitWindow] = useState('')
+  const [briefingMsg, setBriefingMsg] = useState('')
+  const [todayCheckedIn, setTodayCheckedIn] = useState(false)
 
   useEffect(() => {
     const h = new Date().getHours()
@@ -81,6 +115,9 @@ export default function Home() {
       return
     }
 
+    setHabitName(habits.name)
+    setHabitWindow(habits.current_time || habits.preferred_time || '')
+
     const { data: rows } = await supabase
       .from('check_ins')
       .select('*')
@@ -114,56 +151,36 @@ export default function Home() {
       Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
     setDaysActive(daysCount)
 
-    // Briefing
-    const briefingHistory = history.map(r => ({
-      date: r.date,
-      executed: r.executed,
-      difficulty: r.difficulty,
-      timeBucket: bucketFromDate(
-        r.execution_time ? new Date(r.execution_time) : new Date(r.check_in_time)
-      ),
-      failureReason: r.failure_reason,
-    }))
-
-    const b = generateBriefing({
-      history: briefingHistory,
-      targetHabit: habits.name,
-      preferredTime: habits.preferred_time,
-      gritScore: grit,
-      daysActive: daysCount,
-      displayName: profile.display_name,
+    // Status line (header center)
+    const todayDay = new Date().getDay()
+    const byDay = new Array(7).fill(null).map(() => ({ total: 0, fail: 0 }))
+    history.forEach(h => {
+      const d = new Date(h.date).getDay()
+      byDay[d].total++
+      if (!h.executed) byDay[d].fail++
     })
-    setBriefing(b)
-
-    setStatusLine(
-      homeStatusLine({
-        history: briefingHistory,
-        targetHabit: habits.name,
-        preferredTime: habits.preferred_time,
-        gritScore: grit,
-        daysActive: daysCount,
-        displayName: profile.display_name,
-      })
-    )
-
-    // Risk level
-    const recentExecutions = history.slice(-7).filter(h => h.executed).length
-    if (recentExecutions >= 6) setRiskLevel('low')
-    else if (recentExecutions >= 4) setRiskLevel('moderate')
-    else setRiskLevel('high')
-
-    // Quick insight
-    const morningCount = history.filter(h => {
-      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
-      return h.executed && t.getHours() < 12
-    }).length
-    const total = history.filter(h => h.executed).length
-    if (total > 0) {
-      const morningRate = Math.round((morningCount / total) * 100)
-      setQuickInsight(
-        `Sua melhor janela de consistência permanece entre 7h e 10h. Taxa: ${morningRate}% dos sucessos.`
-      )
+    const todayStats = byDay[todayDay]
+    if (history.length < 5) {
+      setStatusLine('Aprendendo seu padrão.')
+    } else if (todayStats.total >= 2 && todayStats.fail / todayStats.total > 0.4) {
+      setStatusLine(`Padrão costuma cair às ${DAY_NAMES_PT[todayDay].toLowerCase()}.`)
+    } else {
+      setStatusLine('Seu padrão está se estabilizando.')
     }
+
+    // Briefing message
+    setBriefingMsg(buildBriefingMsg(history))
+
+    // Today checked in?
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const { data: todayCi } = await supabase
+      .from('check_ins')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('habit_id', habits.id)
+      .eq('date', todayStr)
+      .single()
+    setTodayCheckedIn(!!todayCi)
 
     setLoading(false)
   }
@@ -179,17 +196,8 @@ export default function Home() {
     )
   }
 
-  const riskColors = {
-    low: 'bg-success/15 border-success/50 text-success',
-    moderate: 'bg-warn/15 border-warn/50 text-warn',
-    high: 'bg-error/15 border-error/50 text-error',
-  }
-
-  const riskLabels = {
-    low: 'Baixo',
-    moderate: 'Moderado',
-    high: 'Alto',
-  }
+  const nextTime = formatWindowStart(habitWindow)
+  const nextLabel = todayCheckedIn ? 'Amanhã' : 'Hoje'
 
   return (
     <main className="min-h-screen flex flex-col pb-20 bg-bg relative overflow-hidden">
@@ -199,13 +207,10 @@ export default function Home() {
       <header className="relative z-10 px-5 pt-4 pb-3">
         <div className="grid grid-cols-3 items-center gap-2">
 
-          {/* Left: symbol + text */}
-          <div className="flex items-center gap-1.5">
-            <div className="relative shrink-0" style={{ width: 20, height: 20 }}>
-              <Image src="/logo-symbol.png" alt="" fill className="object-contain" />
-            </div>
-            <div className="relative" style={{ width: 82, height: 26 }}>
-              <Image src="/logo-text.png" alt="Path" fill className="object-contain object-left" />
+          {/* Left: text logo */}
+          <div className="flex items-center">
+            <div className="relative" style={{ width: 72, height: 24 }}>
+              <Image src="/logo-text.png" alt="Path" fill className="object-contain object-left mix-blend-screen" />
             </div>
           </div>
 
@@ -229,41 +234,39 @@ export default function Home() {
         </div>
       </header>
 
-      {/* Grit Ring */}
-      <div className="relative z-10 flex justify-center py-6">
-        <GritRing score={gritScore} delta={delta} size={200} />
+      {/* Grit Score */}
+      <div className="relative z-10 px-6 pt-6 pb-2 animate-fade-up flex flex-col items-center text-center">
+        <div className="eyebrow mb-4">Grit Score</div>
+        <GritRing score={gritScore} delta={delta} size={180} />
+        <p className="text-[13px] text-muted leading-relaxed mt-3">
+          Seu índice atual de consistência comportamental.
+        </p>
       </div>
 
-      {/* Daily Briefing Card */}
-      {briefing && (
-        <div className="relative z-10 px-6 mb-4">
-          <div className={`border rounded-2xl p-5 ${riskColors[riskLevel]}`}>
-            <div className="text-xs font-medium mb-2 opacity-70">
-              Nível de risco: {riskLabels[riskLevel]}
-            </div>
-            <p className="text-sm leading-relaxed mb-4">{briefing.analysisHeadline}</p>
-            <Link
-              href="/insights"
-              className="inline-block text-xs font-medium border-b opacity-70 hover:opacity-100 transition"
-            >
-              Ver detalhes
-            </Link>
-          </div>
-        </div>
-      )}
+      <div className="relative z-10 px-6 mt-6 space-y-3">
 
-      {/* Quick Insight Card */}
-      {quickInsight && (
-        <div className="relative z-10 px-6 mb-4">
-          <div className="bg-surface/30 border border-border rounded-2xl p-5">
-            <div className="text-xs text-muted mb-2">Descoberta comportamental</div>
-            <p className="text-sm text-ink leading-relaxed">{quickInsight}</p>
-          </div>
+        {/* Briefing Matinal */}
+        <div className="card p-5">
+          <div className="eyebrow mb-3">Briefing Matinal</div>
+          <p className="text-[15px] text-ink leading-relaxed">
+            {briefingMsg || 'Hoje é uma oportunidade de reforçar sua consistência.'}
+          </p>
         </div>
-      )}
+
+        {/* Próxima Execução */}
+        {habitName && (
+          <div className="card p-5">
+            <div className="eyebrow mb-3">Próxima execução</div>
+            <div className="text-[17px] font-light text-ink mb-1">{habitName}</div>
+            <div className="text-[13px] text-muted">
+              {nextLabel}{nextTime ? ` • ${nextTime}` : ''}
+            </div>
+          </div>
+        )}
+
+      </div>
 
       <div className="flex-1" />
-
       <BottomNav />
     </main>
   )
