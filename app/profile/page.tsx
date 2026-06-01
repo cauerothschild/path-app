@@ -13,7 +13,18 @@ interface Habit {
   target_duration_min: number
   current_time: string
   current_anchor: string | null
+  target_days: string[] | null
 }
+
+const WEEK_DAYS = [
+  { key: 'Dom', label: 'D' },
+  { key: 'Seg', label: 'S' },
+  { key: 'Ter', label: 'T' },
+  { key: 'Qua', label: 'Q' },
+  { key: 'Qui', label: 'Q' },
+  { key: 'Sex', label: 'S' },
+  { key: 'Sáb', label: 'S' },
+]
 
 const WINDOW_PRESETS = [
   { label: 'Manhã', value: '06h - 09h' },
@@ -43,7 +54,9 @@ export default function ProfilePage() {
   const [selectedPreset, setSelectedPreset] = useState('18h - 21h')
   const [customWindow, setCustomWindow] = useState('')
   const [isCustom, setIsCustom] = useState(false)
+  const [editDays, setEditDays] = useState<string[]>([])
   const [saveError, setSaveError] = useState('')
+  const [saveSuccess, setSaveSuccess] = useState(false)
   const [userId, setUserId] = useState('')
 
   useEffect(() => {
@@ -91,6 +104,7 @@ export default function ProfilePage() {
 
   function initEditState(h: Habit) {
     setEditName(h.name)
+    setEditDays(h.target_days ?? [])
     const window = windowFromHabit(h)
     const matchedPreset = WINDOW_PRESETS.find(p => p.value === window && p.value !== 'custom')
     if (matchedPreset) {
@@ -101,6 +115,12 @@ export default function ProfilePage() {
       setCustomWindow(window !== 'Não definida' ? window : '')
       setIsCustom(true)
     }
+  }
+
+  function toggleDay(key: string) {
+    setEditDays(prev =>
+      prev.includes(key) ? prev.filter(d => d !== key) : [...prev, key]
+    )
   }
 
   function openEdit() {
@@ -121,21 +141,36 @@ export default function ProfilePage() {
     if (!habit) return
     setSaving(true)
     setSaveError('')
+    setSaveSuccess(false)
 
     const windowValue = getWindowValue()
-    const { error } = await supabase
+
+    console.log('[saveHabit] userId:', userId)
+    console.log('[saveHabit] habit.id:', habit.id)
+    console.log('[saveHabit] payload:', { name: editName.trim(), current_time: windowValue, preferred_time: windowValue, target_days: editDays })
+
+    const { data, error } = await supabase
       .from('habits')
       .update({
         name: editName.trim(),
         current_time: windowValue,
         preferred_time: windowValue,
+        target_days: editDays,
       })
       .eq('id', habit.id)
       .eq('user_id', userId)
+      .select()
+
+    console.log('[saveHabit] response data:', data)
+    console.log('[saveHabit] response error:', error)
 
     if (!error) {
-      setHabit({ ...habit, name: editName.trim(), current_time: windowValue })
-      setEditing(false)
+      setHabit({ ...habit, name: editName.trim(), current_time: windowValue, target_days: editDays })
+      setSaveSuccess(true)
+      setTimeout(() => {
+        setEditing(false)
+        setSaveSuccess(false)
+      }, 1000)
     } else {
       setSaveError(error.message || 'Erro ao salvar. Tente novamente.')
     }
@@ -207,6 +242,19 @@ export default function ProfilePage() {
                   <div className="text-[11px] text-muted uppercase tracking-wider mb-1">Janela alvo</div>
                   <div className="text-base text-ink">{displayWindow}</div>
                 </div>
+                {habit!.target_days && habit!.target_days.length > 0 && (
+                  <>
+                    <div className="hairline" />
+                    <div>
+                      <div className="text-[11px] text-muted uppercase tracking-wider mb-2">Dias</div>
+                      <div className="flex gap-1.5 flex-wrap">
+                        {WEEK_DAYS.filter(d => habit!.target_days!.includes(d.key)).map(d => (
+                          <span key={d.key} className="text-xs px-2 py-1 rounded-md bg-primary/15 text-primary border border-primary/30">{d.key}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
               <button
                 onClick={openEdit}
@@ -308,6 +356,25 @@ export default function ProfilePage() {
               />
             </Field>
 
+            <Field label="Dias da semana (opcional)">
+              <div className="flex gap-2">
+                {WEEK_DAYS.map(d => (
+                  <button
+                    key={d.key}
+                    type="button"
+                    onClick={() => toggleDay(d.key)}
+                    className={`flex-1 py-2.5 rounded-lg text-xs font-medium border transition ${
+                      editDays.includes(d.key)
+                        ? 'bg-primary/20 border-primary/50 text-primary'
+                        : 'bg-surface/30 border-border text-muted hover:text-ink'
+                    }`}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
             <Field label="Janela alvo">
               <div className="grid grid-cols-2 gap-2 mb-2">
                 {WINDOW_PRESETS.map(preset => {
@@ -352,12 +419,16 @@ export default function ProfilePage() {
               <p className="text-xs text-error px-1">{saveError}</p>
             )}
 
+            {saveSuccess && (
+              <p className="text-xs text-primary px-1">Salvo com sucesso.</p>
+            )}
+
             <button
               onClick={saveHabit}
               disabled={saving || !editName.trim()}
               className="w-full bg-primary text-bg font-medium py-3 rounded-xl hover:bg-primary/90 transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {saving ? 'Salvando...' : 'Salvar alterações'}
+              {saving ? 'Salvando...' : saveSuccess ? 'Salvo ✓' : 'Salvar alterações'}
             </button>
           </div>
         </div>

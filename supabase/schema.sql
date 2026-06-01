@@ -28,6 +28,7 @@ create table if not exists public.habits (
   target_duration_min integer default 30,
   current_time text default '08:00',
   current_anchor text,
+  target_days text[],
   created_at timestamptz default now(),
   active boolean default true
 );
@@ -47,6 +48,8 @@ create table if not exists public.check_ins (
   app_open_time timestamptz,
   response_speed_ms integer,
   grit_score numeric(5,2),
+  execution_time timestamptz,
+  energy_level text,
   unique (user_id, habit_id, date)
 );
 

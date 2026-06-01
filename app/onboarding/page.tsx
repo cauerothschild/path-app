@@ -86,6 +86,7 @@ export default function Onboarding() {
       name: answers.target_habit,
       preferred_time: answers.target_window,
       current_time: answers.target_window,
+      target_days: answers.target_days,
       target_duration_min: 30,
       active: true,
     })

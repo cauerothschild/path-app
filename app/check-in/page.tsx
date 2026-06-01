@@ -35,14 +35,15 @@ function getHabitDay(now: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate())
 }
 
-// Extrai hora/minuto de início de strings como "18h - 21h" ou "18:00"
-function parseWindowStart(timeStr: string): { hours: number; minutes: number } {
-  if (!timeStr) return { hours: 18, minutes: 0 }
+// Extrai hora/minuto de início de strings como "18h - 21h" ou "18:00".
+// Retorna null se não encontrar nenhum número (ex: valores antigos como 'noite', 'evening').
+function parseWindowStart(timeStr: string): { hours: number; minutes: number } | null {
+  if (!timeStr) return null
   const rangeMatch = timeStr.match(/(\d{1,2})h/)
   if (rangeMatch) return { hours: parseInt(rangeMatch[1]), minutes: 0 }
   const colonMatch = timeStr.match(/(\d{1,2}):(\d{2})/)
   if (colonMatch) return { hours: parseInt(colonMatch[1]), minutes: parseInt(colonMatch[2]) }
-  return { hours: 18, minutes: 0 }
+  return null
 }
 
 export default function CheckInScreen() {
@@ -108,14 +109,20 @@ export default function CheckInScreen() {
     ].join('-')
     setHabitDateStr(hds)
 
-    const windowSrc = habits.current_time || habits.preferred_time || '18:00'
-    const { hours, minutes } = parseWindowStart(windowSrc)
-    const label = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`
+    const windowSrc = habits.current_time || habits.preferred_time || ''
+    const parsed = parseWindowStart(windowSrc)
+    const label = parsed
+      ? `${String(parsed.hours).padStart(2, '0')}:${String(parsed.minutes).padStart(2, '0')}`
+      : '00:00'
     setAvailableAt(label)
 
-    const windowOpen = new Date(habitDay.getFullYear(), habitDay.getMonth(), habitDay.getDate(), hours, minutes)
-    // Janela fecha às 03:00 do dia seguinte ao dia do hábito
-    const deadline = new Date(habitDay.getFullYear(), habitDay.getMonth(), habitDay.getDate() + 1, 3, 0)
+    // windowOpen é sempre em relação ao dia atual (não habitDay) para janelas da manhã
+    const today = new Date()
+    const windowOpen = parsed
+      ? new Date(today.getFullYear(), today.getMonth(), today.getDate(), parsed.hours, parsed.minutes)
+      : new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0)
+    // Janela fecha às 03:00 do dia seguinte
+    const deadline = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 3, 0)
 
     const { data: todayCheckIn } = await supabase
       .from('check_ins')
