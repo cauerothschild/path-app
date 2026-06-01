@@ -13,7 +13,7 @@ interface CheckInRow {
   check_in_time: string
 }
 
-type Step = 'availability' | 'q1' | 'q2' | 'q3' | 'completed'
+type Step = 'availability' | 'q1' | 'q_time' | 'q2' | 'q3' | 'completed'
 
 const SUCCESS_MSGS = ['Continuidade registrada.', 'Padrão reforçado.', 'Contexto salvo.']
 const FAILURE_MSGS = ['Contexto registrado.', 'Ajustando estratégia.', 'Um dia isolado não define a trajetória.']
@@ -26,7 +26,8 @@ const DIFFICULTY_OPTS: { label: string; value: 1 | 2 | 3 }[] = [
 ]
 const FAILURE_OPTS = ['Cansaço', 'Dia caótico', 'Esqueci', 'Falta de tempo', 'Baixa motivação', 'Distrações', 'Quebrei a rotina', 'Não quis']
 const POSITIVE_OPTS = ['Boa energia', 'Ambiente organizado', 'Rotina estável', 'Comecei pequeno', 'Estava motivado', 'Horário funcionou bem']
-const BARRIER_OPTS = ['Meta menor', 'Outro horário', 'Mais estrutura', 'Menos distração', 'Ambiente melhor', 'Lembrete', 'Mais energia', 'Não sei identificar']
+const BARRIER_OPTS = ['Meta menor', 'Outro horário', 'Me preparar antes', 'Menos distração', 'Ambiente melhor', 'Lembrete', 'Mais energia', 'Não sei identificar']
+const TIME_SLOT_OPTS = ['Antes das 8h', '8h – 12h', '12h – 17h', '17h – 21h', 'Depois das 21h']
 
 // Se for antes das 03:00h, o hábito ainda pertence ao dia anterior
 function getHabitDay(now: Date): Date {
@@ -59,6 +60,7 @@ export default function CheckInScreen() {
   const [completionMsg, setCompletionMsg] = useState('')
   const [availableAt, setAvailableAt] = useState('18:00')
   const [habitDateStr, setHabitDateStr] = useState('')
+  const [executionTimeSlot, setExecutionTimeSlot] = useState<string | null>(null)
 
   useEffect(() => {
     loadAll()
@@ -205,8 +207,12 @@ export default function CheckInScreen() {
     )
   }
 
-  const stepIndex = { q1: 0, q2: 1, q3: 2 } as Record<string, number>
-  const currentDot = stepIndex[step] ?? -1
+  const isYesFlow = executed === true
+  const dotMap: Record<string, number> = isYesFlow
+    ? { q1: 0, q_time: 1, q2: 2, q3: 3 }
+    : { q1: 0, q2: 1, q3: 2 }
+  const totalDots = isYesFlow ? 4 : 3
+  const currentDot = dotMap[step] ?? -1
 
   return (
     <main className="min-h-screen flex flex-col pb-20 bg-bg relative overflow-hidden">
@@ -218,7 +224,7 @@ export default function CheckInScreen() {
         <p className="text-[13px] text-muted">{habitName}</p>
         {currentDot >= 0 && (
           <div className="flex gap-1.5 mt-4">
-            {[0, 1, 2].map(i => (
+            {Array.from({ length: totalDots }, (_, i) => i).map(i => (
               <span
                 key={i}
                 className={`h-1 rounded-full transition-all duration-300 ${
@@ -253,7 +259,7 @@ export default function CheckInScreen() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => { setExecuted(true); setStep('q2') }}
+                onClick={() => { setExecuted(true); setStep('q_time') }}
                 className="btn btn-primary py-6 text-base"
               >
                 Sim
@@ -264,6 +270,26 @@ export default function CheckInScreen() {
               >
                 Não
               </button>
+            </div>
+          </div>
+        )}
+
+        {/* Q_TIME: horário de execução (só fluxo Sim) */}
+        {step === 'q_time' && (
+          <div className="space-y-5 max-w-sm mx-auto w-full animate-fade-up" key="q_time">
+            <h2 className="text-2xl font-light text-ink leading-snug">
+              Em qual horário você realizou?
+            </h2>
+            <div className="flex flex-col gap-2.5">
+              {TIME_SLOT_OPTS.map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => { setExecutionTimeSlot(opt); setStep('q2') }}
+                  className="opt-pill py-4 text-sm"
+                >
+                  {opt}
+                </button>
+              ))}
             </div>
           </div>
         )}
@@ -302,7 +328,7 @@ export default function CheckInScreen() {
               {(executed ? POSITIVE_OPTS : BARRIER_OPTS).map(opt => (
                 <button
                   key={opt}
-                  onClick={() => submitCheckIn(executed!, difficulty ?? 2, failureReason, opt)}
+                  onClick={() => submitCheckIn(executed!, difficulty ?? 2, failureReason, executionTimeSlot ? `${executionTimeSlot} · ${opt}` : opt)}
                   className="opt-pill py-4 text-sm"
                 >
                   {opt}
