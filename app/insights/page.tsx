@@ -3,26 +3,9 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
-import { bucketFromDate } from '@/lib/grit'
 import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
-
-interface CheckInRow {
-  date: string
-  executed: boolean
-  difficulty: 1 | 2 | 3
-  failure_reason: string | null
-  execution_time: string | null
-  check_in_time: string
-}
-
-type InsightType = 'pattern' | 'directive' | 'context'
-
-interface InsightBlock {
-  type: InsightType
-  headline: string
-  meta: string
-}
+import { buildInsights, type InsightBlock, type InsightType } from '@/lib/insights'
 
 export default function InsightsScreen() {
   const router = useRouter()
@@ -78,117 +61,8 @@ export default function InsightsScreen() {
       .order('date', { ascending: true })
       .limit(90)
 
-    const history: CheckInRow[] = rows ?? []
-    const blocks: InsightBlock[] = []
-
-    // Context: Today
-    const today = new Date().toISOString().slice(0, 10)
-    const todayCheck = history.find(h => h.date === today)
-    if (todayCheck) {
-      const diffLabel = ['Fácil', 'Moderado', 'Difícil'][todayCheck.difficulty - 1]
-      const reasonLabels: Record<string, string> = {
-        tired: 'Cansaço', forgot: 'Esquecimento',
-        chaotic: 'Dia caótico', unwilling: 'Falta de vontade',
-      }
-      blocks.push({
-        type: 'context',
-        headline: todayCheck.executed
-          ? `Hábito mantido hoje com dificuldade ${diffLabel.toLowerCase()}.`
-          : `Hábito não mantido hoje.`,
-        meta: todayCheck.executed
-          ? `DIFICULDADE: ${diffLabel.toUpperCase()} · HOJE`
-          : `RAZÃO: ${(reasonLabels[todayCheck.failure_reason ?? ''] ?? 'Não especificada').toUpperCase()} · HOJE`,
-      })
-    }
-
-    // Directive: Top failure reason
-    const failuresByReason: Record<string, number> = {}
-    history.forEach(h => {
-      if (!h.executed && h.failure_reason) {
-        failuresByReason[h.failure_reason] = (failuresByReason[h.failure_reason] || 0) + 1
-      }
-    })
-    const topFailure = Object.entries(failuresByReason).sort((a, b) => b[1] - a[1])[0]
-    if (topFailure) {
-      const reasonLabels: Record<string, string> = {
-        tired: 'Cansaço', forgot: 'Esquecimento',
-        chaotic: 'Dia caótico', unwilling: 'Falta de vontade',
-      }
-      const label = reasonLabels[topFailure[0]] || topFailure[0]
-      const totalFailures = history.filter(h => !h.executed).length
-      const pct = totalFailures > 0 ? Math.round((topFailure[1] / totalFailures) * 100) : 0
-      blocks.push({
-        type: 'directive',
-        headline: `${label} representa ${pct}% das suas falhas.`,
-        meta: `OBSERVADO EM ${topFailure[1]} DOS ÚLTIMOS ${totalFailures} ERROS`,
-      })
-    }
-
-    // Pattern: Morning consistency
-    const morningSuccess = history.filter(h => {
-      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
-      return h.executed && t.getHours() < 12
-    }).length
-    const morningAttempts = history.filter(h => {
-      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
-      return t.getHours() < 12
-    }).length
-    const afternoonSuccess = history.filter(h => {
-      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
-      return h.executed && t.getHours() >= 12 && t.getHours() < 18
-    }).length
-    const afternoonAttempts = history.filter(h => {
-      const t = h.execution_time ? new Date(h.execution_time) : new Date(h.check_in_time)
-      return t.getHours() >= 12 && t.getHours() < 18
-    }).length
-    if (morningAttempts > 0) {
-      const morningRate = Math.round((morningSuccess / morningAttempts) * 100)
-      const afternoonRate = afternoonAttempts > 0
-        ? Math.round((afternoonSuccess / afternoonAttempts) * 100)
-        : 0
-      blocks.push({
-        type: 'pattern',
-        headline: `Sua consistência ${morningRate > afternoonRate ? 'é maior' : 'cai'} antes das 12h.`,
-        meta: `TAXA MATINAL: ${morningRate}% · TARDE: ${afternoonRate}%`,
-      })
-    }
-
-    // Pattern: Best weekday
-    const weekDayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sab']
-    const fullWeekDayNames = ['Domingos', 'Segundas', 'Terças', 'Quartas', 'Quintas', 'Sextas', 'Sábados']
-    const successByDay = new Array(7).fill(0)
-    const countByDay = new Array(7).fill(0)
-    history.forEach(h => {
-      const dayIndex = new Date(h.date).getDay()
-      countByDay[dayIndex]++
-      if (h.executed) successByDay[dayIndex]++
-    })
-    const bestDay = successByDay.reduce((best, val, idx) => (val > successByDay[best] ? idx : best), 0)
-    const bestDayRate = countByDay[bestDay] > 0
-      ? Math.round((successByDay[bestDay] / countByDay[bestDay]) * 100)
-      : 0
-    const totalRate = history.length > 0
-      ? Math.round((history.filter(h => h.executed).length / history.length) * 100)
-      : 0
-    blocks.push({
-      type: 'pattern',
-      headline: `${fullWeekDayNames[bestDay]} são seu dia de maior consistência.`,
-      meta: `${weekDayNames[bestDay].toUpperCase()} GRIT: ${bestDayRate}% · GERAL: ${totalRate}%`,
-    })
-
-    // Pattern: Difficult day persistence
-    const totalExecuted = history.filter(h => h.executed).length
-    const difficultButExecuted = history.filter(h => h.executed && h.difficulty === 3).length
-    if (totalExecuted > 0) {
-      const difficultyRate = Math.round((difficultButExecuted / totalExecuted) * 100)
-      blocks.push({
-        type: 'pattern',
-        headline: `Você executa em ${difficultyRate}% dos dias classificados como difíceis.`,
-        meta: `${difficultButExecuted} DE ${totalExecuted} EXECUÇÕES FORAM EM DIAS DIFÍCEIS`,
-      })
-    }
-
-    setInsights(blocks)
+    const history = (rows ?? []) as Parameters<typeof buildInsights>[0]
+    setInsights(buildInsights(history))
     setLoading(false)
   }
 
@@ -232,22 +106,25 @@ export default function InsightsScreen() {
 }
 
 const TYPE_CONFIG: Record<InsightType, { label: string; dotColor: string; labelColor: string }> = {
-  pattern:   { label: 'PATTERN',   dotColor: 'bg-success',   labelColor: 'text-success' },
-  directive: { label: 'DIRECTIVE', dotColor: 'bg-warn',      labelColor: 'text-warn' },
-  context:   { label: 'CONTEXT',   dotColor: 'bg-subtle',    labelColor: 'text-muted' },
+  context:   { label: 'CONTEXT',   dotColor: 'bg-subtle',    labelColor: 'text-muted'    },
+  pattern:   { label: 'PATTERN',   dotColor: 'bg-success',   labelColor: 'text-success'  },
+  directive: { label: 'DIRECTIVE', dotColor: 'bg-warn',      labelColor: 'text-warn'     },
+  premium:   { label: 'PREMIUM',   dotColor: 'bg-primary',   labelColor: 'text-primary'  },
+  locked:    { label: 'LOCKED',    dotColor: 'bg-surface',   labelColor: 'text-subtle'   },
 }
 
 function InsightCard({ insight }: { insight: InsightBlock }) {
   const cfg = TYPE_CONFIG[insight.type]
+  const isLocked = insight.type === 'locked'
   return (
-    <div className="card p-5">
+    <div className={`card p-5 ${isLocked ? 'opacity-50' : ''}`}>
       <div className="flex items-center gap-2 mb-3">
         <span className={`w-2 h-2 rounded-full ${cfg.dotColor} shrink-0`} />
         <span className={`text-[11px] font-semibold tracking-[0.14em] ${cfg.labelColor}`}>
           {cfg.label}
         </span>
       </div>
-      <p className="text-[17px] font-light text-ink leading-snug mb-3">
+      <p className={`text-[17px] font-light leading-snug mb-3 ${isLocked ? 'text-muted' : 'text-ink'}`}>
         {insight.headline}
       </p>
       <p className="text-[10px] tracking-[0.12em] text-subtle uppercase">

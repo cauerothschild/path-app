@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
 
-const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar', 'Beber água']
+const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar']
 
 const WINDOW_PRESETS = [
   { label: 'Manhã', value: '06h - 09h' },

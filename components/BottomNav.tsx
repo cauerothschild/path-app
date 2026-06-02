@@ -55,7 +55,10 @@ export default function BottomNav() {
     <nav className="sticky bottom-0 left-0 right-0 z-20 bg-bg/80 backdrop-blur-xl">
       {/* Hairline top */}
       <div className="hairline" />
-      <div className="flex items-center justify-around py-3 pb-6 px-2">
+      <div
+        className="flex items-center justify-around py-3 px-2"
+        style={{ paddingBottom: 'max(1.25rem, env(safe-area-inset-bottom))' }}
+      >
         {NAV.map(({ href, label, Icon }) => {
           const active = pathname === href || pathname?.startsWith(href + '/')
           return (

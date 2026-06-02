@@ -102,12 +102,18 @@ function buildBriefingMsg(history: CheckInRow[]): string {
   if (Object.values(reasonCounts).some(c => c >= 2))
     return 'Você encontrou o mesmo obstáculo mais de uma vez. Talvez seja hora de ajustar o ambiente.'
 
-  // ── yesterday não executou ──
+  // ── last check-in não executado ──
   if (!last.executed) {
+    const todayStr = new Date().toISOString().slice(0, 10)
+    const isToday = last.date === todayStr
+
     const beforeLast = history.slice(-3, -1)
     if (beforeLast.length >= 1 && beforeLast.every(h => !h.executed))
       return 'Retomar após uma interrupção costuma ser a parte mais difícil. Hoje o objetivo é apenas recomeçar.'
-    return 'Ontem não saiu como planejado. O objetivo hoje é apenas retomar.'
+
+    return isToday
+      ? 'Hoje não saiu como planejado. Tudo bem — o objetivo amanhã é apenas retomar.'
+      : 'Ontem não saiu como planejado. O objetivo hoje é apenas retomar.'
   }
 
   // ── (a partir daqui: last.executed === true) ──
@@ -267,9 +273,12 @@ export default function Home() {
     setGritScore(grit)
     setDelta(gritDelta(dayInputs))
 
-    // Days active
-    const daysCount =
-      Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
+    // Days since habit tracking started (local dates — sem erro de fuso)
+    const habitCreated = new Date(habits.created_at)
+    const startDay = new Date(habitCreated.getFullYear(), habitCreated.getMonth(), habitCreated.getDate())
+    const now2 = new Date()
+    const endDay = new Date(now2.getFullYear(), now2.getMonth(), now2.getDate())
+    const daysCount = Math.floor((endDay.getTime() - startDay.getTime()) / 86400000) + 1
     setDaysActive(daysCount)
 
     // Status line (header center)
@@ -282,7 +291,7 @@ export default function Home() {
     })
     const todayStats = byDay[todayDay]
     if (history.length < 5) {
-      setStatusLine('Aprendendo seu padrão.')
+      setStatusLine('Learning your pattern.')
     } else if (todayStats.total >= 2 && todayStats.fail / todayStats.total > 0.4) {
       setStatusLine(`Padrão costuma cair às ${DAY_NAMES_PT[todayDay].toLowerCase()}.`)
     } else {

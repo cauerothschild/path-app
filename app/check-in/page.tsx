@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase'
 import { gritOfDayWithExecutionTime, currentStreak } from '@/lib/grit'
 import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
+import TimeDrumPicker from '@/components/TimeDrumPicker'
 
 interface CheckInRow {
   executed: boolean
@@ -27,7 +28,10 @@ const DIFFICULTY_OPTS: { label: string; value: 1 | 2 | 3 }[] = [
 const FAILURE_OPTS = ['Cansaço', 'Dia caótico', 'Esqueci', 'Falta de tempo', 'Baixa motivação', 'Distrações', 'Quebrei a rotina', 'Não quis']
 const POSITIVE_OPTS = ['Boa energia', 'Ambiente organizado', 'Rotina estável', 'Comecei pequeno', 'Estava motivado', 'Horário funcionou bem']
 const BARRIER_OPTS = ['Meta menor', 'Outro horário', 'Me preparar antes', 'Menos distração', 'Ambiente melhor', 'Lembrete', 'Mais energia', 'Não sei identificar']
-const TIME_SLOT_OPTS = ['Antes das 8h', '8h – 12h', '12h – 17h', '17h – 21h', 'Depois das 21h']
+function nowHHMM() {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
 
 // Se for antes das 03:00h, o hábito ainda pertence ao dia anterior
 function getHabitDay(now: Date): Date {
@@ -61,6 +65,8 @@ export default function CheckInScreen() {
   const [availableAt, setAvailableAt] = useState('18:00')
   const [habitDateStr, setHabitDateStr] = useState('')
   const [executionTimeSlot, setExecutionTimeSlot] = useState<string | null>(null)
+  const [pickerTime, setPickerTime] = useState(nowHHMM)
+  const [totalCheckIns, setTotalCheckIns] = useState(0)
 
   useEffect(() => {
     loadAll()
@@ -126,13 +132,20 @@ export default function CheckInScreen() {
     // Janela fecha às 03:00 do dia seguinte
     const deadline = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 3, 0)
 
+    const { count: ciCount } = await supabase
+      .from('check_ins')
+      .select('id', { count: 'exact', head: true })
+      .eq('user_id', userId)
+      .eq('habit_id', habits.id)
+    setTotalCheckIns(ciCount ?? 0)
+
     const { data: todayCheckIn } = await supabase
       .from('check_ins')
       .select('*')
       .eq('user_id', userId)
       .eq('habit_id', habits.id)
       .eq('date', hds)
-      .single()
+      .maybeSingle()
 
     if (todayCheckIn) {
       setExecuted(todayCheckIn.executed)
@@ -175,7 +188,7 @@ export default function CheckInScreen() {
       streakBefore,
     })
 
-    await supabase.from('check_ins').upsert(
+    const { error: upsertErr } = await supabase.from('check_ins').upsert(
       {
         user_id: userId,
         habit_id: habitId,
@@ -191,6 +204,13 @@ export default function CheckInScreen() {
       { onConflict: 'user_id,habit_id,date' }
     )
 
+    if (upsertErr) {
+      console.error('[CHECK-IN UPSERT ERROR]', upsertErr)
+      alert(`Erro ao salvar check-in: ${upsertErr.message}`)
+      return
+    }
+
+    setTotalCheckIns(prev => prev + 1)
     const msgs = execVal ? SUCCESS_MSGS : FAILURE_MSGS
     setCompletionMsg(msgs[Math.floor(Math.random() * msgs.length)])
     setStep('completed')
@@ -259,7 +279,7 @@ export default function CheckInScreen() {
             </h2>
             <div className="grid grid-cols-2 gap-3">
               <button
-                onClick={() => { setExecuted(true); setStep('q_time') }}
+                onClick={() => { setExecuted(true); setPickerTime(nowHHMM()); setStep('q_time') }}
                 className="btn btn-primary py-6 text-base"
               >
                 Sim
@@ -276,21 +296,17 @@ export default function CheckInScreen() {
 
         {/* Q_TIME: horário de execução (só fluxo Sim) */}
         {step === 'q_time' && (
-          <div className="space-y-5 max-w-sm mx-auto w-full animate-fade-up" key="q_time">
+          <div className="space-y-6 max-w-sm mx-auto w-full animate-fade-up" key="q_time">
             <h2 className="text-2xl font-light text-ink leading-snug">
               Em qual horário você realizou?
             </h2>
-            <div className="flex flex-col gap-2.5">
-              {TIME_SLOT_OPTS.map(opt => (
-                <button
-                  key={opt}
-                  onClick={() => { setExecutionTimeSlot(opt); setStep('q2') }}
-                  className="opt-pill py-4 text-sm"
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
+            <TimeDrumPicker value={pickerTime} onChange={setPickerTime} />
+            <button
+              onClick={() => { setExecutionTimeSlot(pickerTime); setStep('q2') }}
+              className="btn btn-primary w-full py-4 text-base"
+            >
+              Confirmar
+            </button>
           </div>
         )}
 
@@ -345,9 +361,41 @@ export default function CheckInScreen() {
             <p className="text-xl font-light text-ink">
               {completionMsg || 'Contexto salvo.'}
             </p>
+
+            {/* Calibration progress card */}
+            <div className="card px-5 py-4 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow">Calibração</span>
+                {totalCheckIns < 30
+                  ? <span className="text-[13px] text-ink2 tabular font-medium">
+                      {totalCheckIns}<span className="text-muted">/30</span>
+                    </span>
+                  : <span className="text-[11px] text-primary/80 font-medium uppercase tracking-wider">Concluída</span>
+                }
+              </div>
+
+              {/* Progress track */}
+              <div className="h-[3px] rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{
+                    width: `${Math.min((totalCheckIns / 30) * 100, 100)}%`,
+                    transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+                  }}
+                />
+              </div>
+
+              <p className="text-[12px] text-muted leading-snug">
+                {totalCheckIns < 30
+                  ? `Mais ${30 - totalCheckIns} dia${30 - totalCheckIns === 1 ? '' : 's'} de check-in para o app concluir sua calibração.`
+                  : 'O app já tem dados suficientes para reconhecer seu padrão.'
+                }
+              </p>
+            </div>
+
             <button
               onClick={() => router.push('/dashboard')}
-              className="btn btn-ghost w-full py-4 text-sm mt-4"
+              className="btn btn-ghost w-full py-4 text-sm"
             >
               Voltar para Home
             </button>
