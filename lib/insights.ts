@@ -11,7 +11,7 @@ export interface InsightBlock {
 export interface CheckInRow {
   date: string
   executed: boolean
-  difficulty: 1 | 2 | 3
+  difficulty: 1 | 2 | 3 | 4
   failure_reason: string | null
   execution_time: string | null
   check_in_time: string
@@ -155,7 +155,7 @@ function buildContextBlock(history: CheckInRow[]): InsightBlock | null {
     else                                           headline = 'Hábito não mantido hoje.'
   }
 
-  const diffLabel = ['Fácil', 'Moderado', 'Difícil'][difficulty - 1]
+  const diffLabel = ['Fácil', 'Moderado', 'Difícil', 'Quase não aconteceu'][difficulty - 1] ?? 'Difícil'
   const metaParts = executed
     ? [
         `DIFICULDADE: ${diffLabel.toUpperCase()}`,

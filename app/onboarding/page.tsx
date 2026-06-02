@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
+import TimeDrumPicker from '@/components/TimeDrumPicker'
 
-const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar']
+const HABIT_OPTIONS = ['Treinar', 'Ler', 'Meditar', 'Dormir cedo', 'Estudar', 'Alongar', 'Aprender idioma', 'Deep work', 'Planejamento', 'Organização']
 
 const WINDOW_PRESETS = [
   { label: 'Manhã', value: '06h - 09h' },
@@ -234,8 +235,12 @@ function StepName({ value, onChange }: { value: string; onChange: (v: string) =>
         value={value}
         onChange={e => onChange(e.target.value)}
         placeholder="Digite seu nome"
+        maxLength={15}
         className="input"
       />
+      <p className="text-[11px] text-subtle text-right mt-2 tabular">
+        {value.length}/15
+      </p>
     </div>
   )
 }
@@ -252,7 +257,7 @@ function StepSchedule({
   onDaysChange: (v: string[]) => void
 }) {
   const [customActive, setCustomActive] = useState(false)
-  const [customValue, setCustomValue] = useState('')
+  const [customTime, setCustomTime] = useState('06h - 09h')
 
   function toggleDay(key: string) {
     const set = new Set(days)
@@ -281,21 +286,21 @@ function StepSchedule({
         ))}
         <button
           type="button"
-          onClick={() => { setCustomActive(true); onWindowChange(customValue || ' ') }}
+          onClick={() => { setCustomActive(true); onWindowChange(customTime) }}
           className={`opt-pill w-full text-left ${customActive ? 'selected' : ''}`}
         >
-          {customActive ? (
-            <input
-              autoFocus
-              value={customValue}
-              onChange={e => { setCustomValue(e.target.value); onWindowChange(e.target.value) }}
-              placeholder="Ex: 07h - 08h"
-              className="bg-transparent outline-none w-full text-inherit placeholder:text-bg/50"
-            />
-          ) : (
-            'Personalizado'
-          )}
+          <span className="font-medium">Personalizado</span>
+          {customActive && <span className="ml-2 opacity-60">{customTime}</span>}
         </button>
+        {customActive && (
+          <div className="pt-2">
+            <TimeDrumPicker
+              value={customTime}
+              onChange={v => { setCustomTime(v); onWindowChange(v) }}
+              mode="window"
+            />
+          </div>
+        )}
       </div>
 
       <p className="text-[11px] text-muted uppercase tracking-wider mb-3">Dias da semana (opcional)</p>

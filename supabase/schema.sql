@@ -65,14 +65,30 @@ create table if not exists public.daily_context (
   unique (user_id, date)
 );
 
+-- ============================================
+-- context_questions (Perguntas passivas de contexto)
+-- ============================================
+create table if not exists public.context_questions (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references public.users(id) on delete cascade,
+  date date not null default current_date,
+  question_id integer not null,
+  question_text text not null,
+  answer text not null,
+  created_at timestamptz default now(),
+  unique (user_id, date)
+);
+
 create index if not exists idx_checkins_user_date on public.check_ins(user_id, date desc);
 create index if not exists idx_checkins_user_habit on public.check_ins(user_id, habit_id);
 create index if not exists idx_context_user_date on public.daily_context(user_id, date desc);
+create index if not exists idx_ctxq_user_date on public.context_questions(user_id, date desc);
 
 alter table public.users enable row level security;
 alter table public.habits enable row level security;
 alter table public.check_ins enable row level security;
 alter table public.daily_context enable row level security;
+alter table public.context_questions enable row level security;
 
 create policy "users_self_read" on public.users for select using (auth.uid() = id);
 create policy "users_self_update" on public.users for update using (auth.uid() = id);
@@ -81,6 +97,7 @@ create policy "users_self_insert" on public.users for insert with check (auth.ui
 create policy "habits_self_all" on public.habits for all using (auth.uid() = user_id);
 create policy "checkins_self_all" on public.check_ins for all using (auth.uid() = user_id);
 create policy "context_self_all" on public.daily_context for all using (auth.uid() = user_id);
+create policy "ctxq_self_all" on public.context_questions for all using (auth.uid() = user_id);
 
 create or replace function public.handle_new_user()
 returns trigger as $$

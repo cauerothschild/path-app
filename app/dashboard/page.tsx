@@ -18,7 +18,7 @@ interface CheckInRow {
   id: string
   date: string
   executed: boolean
-  difficulty: 1 | 2 | 3
+  difficulty: 1 | 2 | 3 | 4
   failure_reason: string | null
   check_in_time: string
   execution_time: string | null
@@ -255,6 +255,17 @@ export default function Home() {
 
     const history: CheckInRow[] = rows ?? []
 
+    // Parse planned time from habits.schedule_time for V2 grit
+    const windowSrc = habits.schedule_time || habits.preferred_time || ''
+    const plannedParsed = (() => {
+      if (!windowSrc) return null
+      const hhmm = windowSrc.match(/^(\d{1,2}):(\d{2})$/)
+      if (hhmm) return { hour: parseInt(hhmm[1]), minute: parseInt(hhmm[2]) }
+      const hmatch = windowSrc.match(/(\d{1,2})h/)
+      if (hmatch) return { hour: parseInt(hmatch[1]), minute: 0 }
+      return null
+    })()
+
     // Grit calculation
     const dayInputs: CheckInData[] = []
     let runningStreak = 0
@@ -265,6 +276,7 @@ export default function Home() {
         difficulty: row.difficulty,
         executionTime: row.executed ? timeToUse : null,
         streakBefore: runningStreak,
+        ...(plannedParsed ? { plannedHour: plannedParsed.hour, plannedMinute: plannedParsed.minute } : {}),
       })
       runningStreak = row.executed ? runningStreak + 1 : 0
     }

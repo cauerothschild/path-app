@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
+import TimeDrumPicker from '@/components/TimeDrumPicker'
 
 interface Habit {
   id: string
@@ -112,7 +113,8 @@ export default function ProfilePage() {
       setIsCustom(false)
     } else {
       setSelectedPreset('custom')
-      setCustomWindow(window !== 'Não definida' ? window : '')
+      const rangeMatch = window.match(/^(\d{1,2})h?\s*[-–]\s*(\d{1,2})h?$/)
+      setCustomWindow(rangeMatch ? window : '06h - 09h')
       setIsCustom(true)
     }
   }
@@ -436,12 +438,9 @@ export default function ProfilePage() {
                 })}
               </div>
               {isCustom && (
-                <input
-                  value={customWindow}
-                  onChange={e => setCustomWindow(e.target.value)}
-                  placeholder="Ex: 18h - 20h"
-                  className="w-full bg-surface/40 border border-border px-3 py-2.5 rounded-lg text-sm text-ink placeholder:text-subtle focus:outline-none focus:border-primary/50 mt-1"
-                />
+                <div className="mt-2">
+                  <TimeDrumPicker value={customWindow} onChange={setCustomWindow} mode="window" />
+                </div>
               )}
             </Field>
 

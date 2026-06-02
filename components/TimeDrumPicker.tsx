@@ -14,34 +14,61 @@ interface ColumnProps {
 }
 
 function ScrollColumn({ items, selected, onSelect, width = 100 }: ColumnProps) {
-  const ref = useRef<HTMLDivElement>(null)
-  const lastIdx = useRef(Math.max(0, items.indexOf(selected)))
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const n = items.length
+  // Triple the list so there's always room to scroll in both directions
+  const looped = [...items, ...items, ...items]
 
-  // Scroll to selected on mount only
+  const ref        = useRef<HTMLDivElement>(null)
+  const lastReal   = useRef(Math.max(0, items.indexOf(selected)))
+  const snapTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const jumpTimer  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isJumping  = useRef(false)
+
+  // Initialize to middle copy so we can scroll up OR down
   useEffect(() => {
-    const idx = Math.max(0, items.indexOf(selected))
+    const realIdx = Math.max(0, items.indexOf(selected))
     if (ref.current) {
-      ref.current.scrollTop = idx * ITEM_H
-      lastIdx.current = idx
+      ref.current.scrollTop = (n + realIdx) * ITEM_H
+      lastReal.current = realIdx
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const handleScroll = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
+    if (isJumping.current) return
+
+    // Cancel any pending jump if the user is still scrolling
+    if (jumpTimer.current) { clearTimeout(jumpTimer.current); jumpTimer.current = null }
+    if (snapTimer.current) clearTimeout(snapTimer.current)
+
+    snapTimer.current = setTimeout(() => {
       if (!ref.current) return
-      const idx = Math.round(ref.current.scrollTop / ITEM_H)
-      const clamped = Math.max(0, Math.min(idx, items.length - 1))
-      // Snap into position
+
+      const rawIdx = Math.round(ref.current.scrollTop / ITEM_H)
+      const clamped = Math.max(0, Math.min(rawIdx, looped.length - 1))
+
+      // Snap to nearest item
       ref.current.scrollTo({ top: clamped * ITEM_H, behavior: 'smooth' })
-      if (clamped !== lastIdx.current) {
-        lastIdx.current = clamped
-        onSelect(items[clamped])
+
+      const realIdx = ((clamped % n) + n) % n
+
+      if (realIdx !== lastReal.current) {
+        lastReal.current = realIdx
+        onSelect(items[realIdx])
       }
+
+      // After smooth scroll settles, silently jump back to the middle copy
+      jumpTimer.current = setTimeout(() => {
+        if (!ref.current) return
+        const target = n + lastReal.current
+        if (Math.round(ref.current.scrollTop / ITEM_H) !== target) {
+          isJumping.current = true
+          ref.current.scrollTop = target * ITEM_H
+          requestAnimationFrame(() => { isJumping.current = false })
+        }
+      }, 350)
     }, 80)
-  }, [items, onSelect])
+  }, [n, looped.length, items, onSelect])
 
   const containerH = ITEM_H * VISIBLE
 
@@ -77,21 +104,20 @@ function ScrollColumn({ items, selected, onSelect, width = 100 }: ColumnProps) {
         }}
       />
 
-      {/* Scroll container */}
+      {/* Scroll container – no CSS snap, handled entirely in JS */}
       <div
         ref={ref}
         className="h-full overflow-y-scroll no-scroll"
-        style={{ scrollSnapType: 'y mandatory' }}
         onScroll={handleScroll}
       >
         {/* Top padding */}
         <div style={{ height: ITEM_H * PAD }} />
 
-        {items.map(item => (
+        {looped.map((item, i) => (
           <div
-            key={item}
+            key={i}
             className="flex items-center justify-center font-light text-ink tabular"
-            style={{ height: ITEM_H, scrollSnapAlign: 'start', fontSize: 28 }}
+            style={{ height: ITEM_H, fontSize: 28 }}
           >
             {item}
           </div>
@@ -107,16 +133,44 @@ function ScrollColumn({ items, selected, onSelect, width = 100 }: ColumnProps) {
 export default function TimeDrumPicker({
   value,
   onChange,
+  mode = 'time',
 }: {
   value: string
   onChange: (v: string) => void
+  mode?: 'time' | 'window'
 }) {
-  const [hStr, mStr] = value.split(':')
   const hours   = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'))
   const minutes = Array.from({ length: 60 }, (_, i) => String(i).padStart(2, '0'))
 
-  const setHour = useCallback((h: string) => onChange(`${h}:${mStr}`), [mStr, onChange])
-  const setMin  = useCallback((m: string) => onChange(`${hStr}:${m}`), [hStr, onChange])
+  // ── time mode parsing (HH:MM) ────────────────────────────────────────────
+  const timeParts = value.includes(':') ? value.split(':') : ['12', '00']
+  const hStr = timeParts[0] ?? '12'
+  const mStr = timeParts[1] ?? '00'
+
+  // ── window mode parsing ("06h - 09h") ────────────────────────────────────
+  const rangeMatch = value.match(/^(\d{1,2})h?\s*[-–]\s*(\d{1,2})h?$/)
+  const startH = (rangeMatch ? rangeMatch[1] : '06').padStart(2, '0')
+  const endH   = (rangeMatch ? rangeMatch[2] : '09').padStart(2, '0')
+
+  const setHour  = useCallback((h: string) => onChange(`${h}:${mStr}`),           [mStr,   onChange])
+  const setMin   = useCallback((m: string) => onChange(`${hStr}:${m}`),           [hStr,   onChange])
+  const setStart = useCallback((h: string) => onChange(`${h}h - ${endH}h`),       [endH,   onChange])
+  const setEnd   = useCallback((h: string) => onChange(`${startH}h - ${h}h`),     [startH, onChange])
+
+  if (mode === 'window') {
+    return (
+      <div className="flex items-center justify-center">
+        <ScrollColumn items={hours} selected={startH} onSelect={setStart} width={110} />
+        <span
+          className="text-2xl font-light text-muted/60 pointer-events-none"
+          style={{ width: 36, textAlign: 'center' }}
+        >
+          –
+        </span>
+        <ScrollColumn items={hours} selected={endH} onSelect={setEnd} width={110} />
+      </div>
+    )
+  }
 
   return (
     <div className="flex items-center justify-center">

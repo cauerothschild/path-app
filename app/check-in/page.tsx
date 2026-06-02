@@ -7,23 +7,25 @@ import { gritOfDayWithExecutionTime, currentStreak } from '@/lib/grit'
 import WavePath from '@/components/WavePath'
 import BottomNav from '@/components/BottomNav'
 import TimeDrumPicker from '@/components/TimeDrumPicker'
+import { getSuggestions } from '@/lib/path-suggestions'
+import { pickContextQuestion, type ContextQuestion } from '@/lib/context-questions'
 
 interface CheckInRow {
   executed: boolean
-  difficulty: 1 | 2 | 3
+  difficulty: 1 | 2 | 3 | 4
   check_in_time: string
 }
 
-type Step = 'availability' | 'q1' | 'q_time' | 'q2' | 'q3' | 'completed'
+type Step = 'availability' | 'q1' | 'q_time' | 'q2' | 'q3' | 'completed' | 'context_q' | 'context_done'
 
 const SUCCESS_MSGS = ['Continuidade registrada.', 'Padrão reforçado.', 'Contexto salvo.']
 const FAILURE_MSGS = ['Contexto registrado.', 'Ajustando estratégia.', 'Um dia isolado não define a trajetória.']
 
-const DIFFICULTY_OPTS: { label: string; value: 1 | 2 | 3 }[] = [
+const DIFFICULTY_OPTS: { label: string; value: 1 | 2 | 3 | 4 }[] = [
   { label: 'Fácil', value: 1 },
   { label: 'Médio', value: 2 },
   { label: 'Difícil', value: 3 },
-  { label: 'Quase não aconteceu', value: 3 },
+  { label: 'Quase não aconteceu', value: 4 },
 ]
 const FAILURE_OPTS = ['Cansaço', 'Dia caótico', 'Esqueci', 'Falta de tempo', 'Baixa motivação', 'Distrações', 'Quebrei a rotina', 'Não quis']
 const POSITIVE_OPTS = ['Boa energia', 'Ambiente organizado', 'Rotina estável', 'Comecei pequeno', 'Estava motivado', 'Horário funcionou bem']
@@ -59,14 +61,18 @@ export default function CheckInScreen() {
   const [habitId, setHabitId] = useState('')
   const [habitName, setHabitName] = useState('')
   const [executed, setExecuted] = useState<boolean | null>(null)
-  const [difficulty, setDifficulty] = useState<1 | 2 | 3 | null>(null)
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3 | 4 | null>(null)
   const [failureReason, setFailureReason] = useState<string | null>(null)
   const [completionMsg, setCompletionMsg] = useState('')
   const [availableAt, setAvailableAt] = useState('18:00')
   const [habitDateStr, setHabitDateStr] = useState('')
   const [executionTimeSlot, setExecutionTimeSlot] = useState<string | null>(null)
+  const [selectedBarrier, setSelectedBarrier] = useState<string | null>(null)
   const [pickerTime, setPickerTime] = useState(nowHHMM)
   const [totalCheckIns, setTotalCheckIns] = useState(0)
+  const [noHabitDay, setNoHabitDay] = useState(false)
+  const [contextQuestion, setContextQuestion] = useState<ContextQuestion | null>(null)
+  const [contextDoneMsg, setContextDoneMsg] = useState('')
 
   useEffect(() => {
     loadAll()
@@ -100,14 +106,6 @@ export default function CheckInScreen() {
       .limit(1)
       .maybeSingle()
 
-    if (!habits) {
-      setLoading(false)
-      return
-    }
-
-    setHabitId(habits.id)
-    setHabitName(habits.name)
-
     const now = new Date()
     const habitDay = getHabitDay(now)
     const hds = [
@@ -116,6 +114,29 @@ export default function CheckInScreen() {
       String(habitDay.getDate()).padStart(2, '0'),
     ].join('-')
     setHabitDateStr(hds)
+
+    if (!habits) {
+      await initContextFlow(userId, habitDay, hds)
+      setLoading(false)
+      return
+    }
+
+    setHabitId(habits.id)
+    setHabitName(habits.name)
+
+    const dow = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'][habitDay.getDay()]
+    const scheduledToday = !habits.target_days || habits.target_days.length === 0 || habits.target_days.includes(dow)
+    if (!scheduledToday) {
+      const { count: ciCount } = await supabase
+        .from('check_ins')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .eq('habit_id', habits.id)
+      setTotalCheckIns(ciCount ?? 0)
+      await initContextFlow(userId, habitDay, hds)
+      setLoading(false)
+      return
+    }
 
     const windowSrc = habits.schedule_time || habits.preferred_time || ''
     const parsed = parseWindowStart(windowSrc)
@@ -161,7 +182,7 @@ export default function CheckInScreen() {
 
   async function submitCheckIn(
     execVal: boolean,
-    diffVal: 1 | 2 | 3,
+    diffVal: 1 | 2 | 3 | 4,
     reasonVal: string | null,
     contextVal: string
   ) {
@@ -216,6 +237,39 @@ export default function CheckInScreen() {
     setStep('completed')
   }
 
+  async function initContextFlow(userId: string, habitDay: Date, hds: string) {
+    setNoHabitDay(true)
+    const { data: existing } = await supabase
+      .from('context_questions')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('date', hds)
+      .maybeSingle()
+    if (existing) {
+      setContextDoneMsg('Você já registrou seu contexto hoje.')
+      setStep('context_done')
+      return
+    }
+    setContextQuestion(pickContextQuestion(habitDay))
+    setStep('context_q')
+  }
+
+  async function submitContextQuestion(answer: string) {
+    const { data: userData } = await supabase.auth.getUser()
+    if (!userData.user || !contextQuestion) return
+    const today = habitDateStr || getHabitDay(new Date()).toISOString().slice(0, 10)
+    const { error } = await supabase.from('context_questions').insert({
+      user_id: userData.user.id,
+      date: today,
+      question_id: contextQuestion.id,
+      question_text: contextQuestion.text,
+      answer,
+    })
+    if (error) console.error('[CONTEXT Q ERROR]', error)
+    setContextDoneMsg('Contexto registrado.')
+    setStep('context_done')
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-muted">
@@ -240,8 +294,8 @@ export default function CheckInScreen() {
 
       {/* Header */}
       <header className="relative z-10 px-6 pt-6 pb-4">
-        <div className="eyebrow mb-1">Check-in diário</div>
-        <p className="text-[13px] text-muted">{habitName}</p>
+        <div className="eyebrow mb-1">{noHabitDay ? 'Contexto diário' : 'Check-in diário'}</div>
+        <p className="text-[13px] text-muted">{noHabitDay ? 'Observação passiva' : habitName}</p>
         {currentDot >= 0 && (
           <div className="flex gap-1.5 mt-4">
             {Array.from({ length: totalDots }, (_, i) => i).map(i => (
@@ -344,7 +398,10 @@ export default function CheckInScreen() {
               {(executed ? POSITIVE_OPTS : BARRIER_OPTS).map(opt => (
                 <button
                   key={opt}
-                  onClick={() => submitCheckIn(executed!, difficulty ?? 2, failureReason, executionTimeSlot ? `${executionTimeSlot} · ${opt}` : opt)}
+                  onClick={() => {
+                    if (!executed) setSelectedBarrier(opt)
+                    submitCheckIn(executed!, difficulty ?? 2, failureReason, executionTimeSlot ? `${executionTimeSlot} · ${opt}` : opt)
+                  }}
                   className="opt-pill py-4 text-sm"
                 >
                   {opt}
@@ -356,11 +413,13 @@ export default function CheckInScreen() {
 
         {/* Completed */}
         {step === 'completed' && (
-          <div className="space-y-6 max-w-sm mx-auto w-full text-center animate-fade-up">
-            <div className="text-3xl text-primary">✓</div>
-            <p className="text-xl font-light text-ink">
-              {completionMsg || 'Contexto salvo.'}
-            </p>
+          <div className="space-y-6 max-w-sm mx-auto w-full animate-fade-up">
+            <div className="text-center">
+              <div className="text-3xl text-primary">✓</div>
+              <p className="text-xl font-light text-ink mt-3">
+                {completionMsg || 'Contexto salvo.'}
+              </p>
+            </div>
 
             {/* Calibration progress card */}
             <div className="card px-5 py-4 text-left space-y-3">
@@ -385,6 +444,105 @@ export default function CheckInScreen() {
                 />
               </div>
 
+              <p className="text-[12px] text-muted leading-snug">
+                {totalCheckIns < 30
+                  ? `Mais ${30 - totalCheckIns} dia${30 - totalCheckIns === 1 ? '' : 's'} de check-in para o app concluir sua calibração.`
+                  : 'O app já tem dados suficientes para reconhecer seu padrão.'
+                }
+              </p>
+            </div>
+
+            {/* PATH SUGGESTION */}
+            {(() => {
+              if (executed || !failureReason || !selectedBarrier) return null
+              const all = getSuggestions(failureReason)
+              const match = all.find(s => s.title === selectedBarrier)
+              if (!match) return null
+              return (
+                <div className="card p-5 text-left space-y-4">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-warn shrink-0" />
+                    <span className="text-[11px] font-semibold tracking-[0.14em] text-warn">
+                      PATH SUGGESTION
+                    </span>
+                  </div>
+                  <div>
+                    <p className="text-[14px] font-medium text-ink mb-1">· {match.title}</p>
+                    <p className="text-[13px] font-light text-muted leading-relaxed">{match.body}</p>
+                  </div>
+                </div>
+              )
+            })()}
+
+            <button
+              onClick={() => router.push('/dashboard')}
+              className="btn btn-ghost w-full py-4 text-sm"
+            >
+              Voltar para Home
+            </button>
+          </div>
+        )}
+
+        {/* Context Question — dia sem hábito programado */}
+        {step === 'context_q' && contextQuestion && (
+          <div className="space-y-8 max-w-sm mx-auto w-full animate-fade-up">
+            <div>
+              <p className="text-[12px] text-muted uppercase tracking-[0.1em] mb-4">
+                Você não tem hábitos programados pra hoje
+              </p>
+              <h2 className="text-2xl font-light text-ink leading-snug">
+                {contextQuestion.text}
+              </h2>
+            </div>
+            <div className="grid grid-cols-2 gap-2.5">
+              {contextQuestion.options.map(opt => (
+                <button
+                  key={opt}
+                  onClick={() => submitContextQuestion(opt)}
+                  className="opt-pill py-4 text-sm"
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { setContextDoneMsg('Tudo bem. Você pode responder amanhã.'); setStep('context_done') }}
+              className="w-full btn-quiet py-3 text-sm"
+            >
+              Pular
+            </button>
+          </div>
+        )}
+
+        {/* Context Done */}
+        {step === 'context_done' && (
+          <div className="space-y-6 max-w-sm mx-auto w-full animate-fade-up">
+            <div className="text-center">
+              <div className="text-3xl text-primary">◦</div>
+              <p className="text-xl font-light text-ink mt-3">
+                {contextDoneMsg || 'Contexto registrado.'}
+              </p>
+            </div>
+
+            <div className="card px-5 py-4 text-left space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="eyebrow">Calibração</span>
+                {totalCheckIns < 30
+                  ? <span className="text-[13px] text-ink2 tabular font-medium">
+                      {totalCheckIns}<span className="text-muted">/30</span>
+                    </span>
+                  : <span className="text-[11px] text-primary/80 font-medium uppercase tracking-wider">Concluída</span>
+                }
+              </div>
+              <div className="h-[3px] rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{
+                    width: `${Math.min((totalCheckIns / 30) * 100, 100)}%`,
+                    transition: 'width 1s cubic-bezier(0.16,1,0.3,1)',
+                  }}
+                />
+              </div>
               <p className="text-[12px] text-muted leading-snug">
                 {totalCheckIns < 30
                   ? `Mais ${30 - totalCheckIns} dia${30 - totalCheckIns === 1 ? '' : 's'} de check-in para o app concluir sua calibração.`

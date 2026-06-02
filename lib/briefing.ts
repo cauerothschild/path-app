@@ -9,7 +9,7 @@ export interface BriefingInput {
   history: Array<{
     date: string
     executed: boolean
-    difficulty: 1 | 2 | 3
+    difficulty: 1 | 2 | 3 | 4
     timeBucket: TimeBucket
     failureReason: string | null
   }>
