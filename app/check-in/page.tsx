@@ -170,6 +170,10 @@ export default function CheckInScreen() {
 
     if (todayCheckIn) {
       setExecuted(todayCheckIn.executed)
+      if (!todayCheckIn.executed) {
+        setFailureReason(todayCheckIn.failure_reason ?? null)
+        setSelectedBarrier(todayCheckIn.energy_level ?? null)
+      }
       setStep('completed')
     } else if (now >= windowOpen && now <= deadline) {
       setStep('q1')
@@ -265,7 +269,11 @@ export default function CheckInScreen() {
       question_text: contextQuestion.text,
       answer,
     })
-    if (error) console.error('[CONTEXT Q ERROR]', error)
+    if (error) {
+      console.error('[CONTEXT Q ERROR]', error)
+      alert(`Erro ao salvar contexto: ${error.message}`)
+      return
+    }
     setContextDoneMsg('Contexto registrado.')
     setStep('context_done')
   }
