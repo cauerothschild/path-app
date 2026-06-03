@@ -59,6 +59,10 @@ export default function ProfilePage() {
   const [saveError, setSaveError] = useState('')
   const [saveSuccess, setSaveSuccess] = useState(false)
   const [userId, setUserId] = useState('')
+  const [totalCheckIns, setTotalCheckIns] = useState(0)
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameSaving, setNameSaving] = useState(false)
 
   useEffect(() => {
     load()
@@ -84,6 +88,7 @@ export default function ProfilePage() {
 
     setUserId(userData.user.id)
     setDisplayName(profile.display_name || '')
+    setNameInput(profile.display_name || '')
     const daysCount =
       Math.floor((Date.now() - new Date(profile.created_at).getTime()) / 86400000) + 1
     setDaysActive(daysCount)
@@ -99,6 +104,12 @@ export default function ProfilePage() {
     if (habits) {
       setHabit(habits)
       initEditState(habits)
+      const { count } = await supabase
+        .from('check_ins')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', userData.user.id)
+        .eq('habit_id', habits.id)
+      setTotalCheckIns(count ?? 0)
     }
     setLoading(false)
   }
@@ -241,7 +252,7 @@ export default function ProfilePage() {
             <h1 className="text-xl font-light text-ink">{displayName || '—'}</h1>
           </div>
           <button
-            onClick={logout}
+            onClick={() => router.push('/settings')}
             className="text-muted hover:text-ink transition"
             aria-label="Configurações"
           >
@@ -321,13 +332,66 @@ export default function ProfilePage() {
           )}
         </div>
 
+        {/* NOME */}
+        <div className="card p-5">
+          <div className="eyebrow mb-4">Nome</div>
+          {editingName ? (
+            <div className="space-y-3">
+              <input
+                value={nameInput}
+                onChange={e => setNameInput(e.target.value)}
+                placeholder="Seu nome"
+                autoFocus
+                className="w-full bg-white/5 border border-border rounded-xl px-4 py-3 text-ink text-sm placeholder:text-muted focus:outline-none focus:border-primary/50"
+              />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditingName(false); setNameInput(displayName) }}
+                  className="flex-1 btn btn-ghost py-2.5 text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={nameSaving || !nameInput.trim()}
+                  onClick={async () => {
+                    if (!nameInput.trim()) return
+                    setNameSaving(true)
+                    await supabase.from('users').update({ display_name: nameInput.trim() }).eq('id', userId)
+                    setDisplayName(nameInput.trim())
+                    setNameSaving(false)
+                    setEditingName(false)
+                  }}
+                  className="flex-1 btn btn-primary py-2.5 text-sm disabled:opacity-50"
+                >
+                  {nameSaving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between">
+              <span className="text-base text-ink">{displayName || '—'}</span>
+              <button
+                onClick={() => setEditingName(true)}
+                className="text-[13px] text-primary/70 hover:text-primary transition"
+              >
+                Editar
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* OBSERVAÇÃO */}
         <div className="card p-5">
           <div className="eyebrow mb-4">Observação</div>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted">Janela de calibração</span>
-              <span className="text-sm text-ink">1 / 30 dias</span>
+              <span className="text-sm text-ink">
+                {totalCheckIns < 30
+                  ? <>{totalCheckIns}<span className="text-muted"> / 30 dias</span></>
+                  : <span className="text-primary/80">Concluída</span>
+                }
+              </span>
             </div>
             <div className="hairline" />
             <div className="flex items-center justify-between">
@@ -337,32 +401,6 @@ export default function ProfilePage() {
           </div>
         </div>
 
-        {/* PREFERÊNCIAS */}
-        <div className="card p-5">
-          <div className="eyebrow mb-3">Preferências</div>
-          <button className="w-full flex items-center justify-between py-2 text-left">
-            <div className="flex items-center gap-3">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" className="text-muted">
-                <path d="M18 8a6 6 0 1 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.5 0"
-                  stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-              <div>
-                <div className="text-sm text-ink">Notificações</div>
-                <div className="text-xs text-muted">Gerenciar lembretes</div>
-              </div>
-            </div>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-muted">
-              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        <button
-          onClick={logout}
-          className="w-full text-sm text-muted py-3 hover:text-warn transition"
-        >
-          Sair da conta
-        </button>
       </div>
 
       {/* Bottom sheet edit modal */}

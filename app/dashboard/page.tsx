@@ -377,13 +377,19 @@ export default function Home() {
       </header>
 
       {/* Grit Score */}
-      <div className="relative z-10 px-6 pt-6 pb-2 animate-fade-up flex flex-col items-center text-center">
-        <div className="eyebrow mb-4">Grit Score</div>
+      <button
+        onClick={() => router.push('/stats')}
+        className="relative z-10 px-6 pt-6 pb-2 animate-fade-up flex flex-col items-center text-center w-full"
+      >
+        <div className="eyebrow mb-4 flex items-center gap-1.5">
+          Grit Score
+          <span className="text-muted/50">›</span>
+        </div>
         <GritRing score={gritScore} delta={delta} size={180} />
         <p className="text-[13px] text-muted leading-relaxed mt-3">
           Seu índice atual de consistência comportamental.
         </p>
-      </div>
+      </button>
 
       <div className="relative z-10 px-6 mt-6 space-y-3">
 

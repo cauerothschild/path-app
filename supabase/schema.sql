@@ -84,6 +84,26 @@ create index if not exists idx_checkins_user_habit on public.check_ins(user_id, 
 create index if not exists idx_context_user_date on public.daily_context(user_id, date desc);
 create index if not exists idx_ctxq_user_date on public.context_questions(user_id, date desc);
 
+-- ============================================
+-- user_settings
+-- ============================================
+create table if not exists public.user_settings (
+  user_id uuid primary key references public.users(id) on delete cascade,
+  share_location boolean default false,
+  collect_open_time boolean default true,
+  notifications_enabled boolean default false,
+  quiet_start time default '21:00',
+  quiet_end time default '08:00',
+  quiet_mode boolean default true,
+  updated_at timestamptz default now()
+);
+
+alter table public.user_settings enable row level security;
+create policy "usersettings_self_all" on public.user_settings for all using (auth.uid() = user_id);
+
+-- deleted_history flag on users
+alter table public.users add column if not exists deleted_history boolean default false;
+
 alter table public.users enable row level security;
 alter table public.habits enable row level security;
 alter table public.check_ins enable row level security;
