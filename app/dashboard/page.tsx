@@ -208,7 +208,7 @@ export default function Home() {
         <div className="w-32 text-primary/70">
           <WavePath variant="loader" />
         </div>
-        <div className="eyebrow text-subtle">Loading patterns…</div>
+        <div className="eyebrow text-subtle">Loading patterns...</div>
       </div>
     )
   }
@@ -287,7 +287,7 @@ export default function Home() {
               </div>
             </div>
           ) : (
-            <p className="text-[14px] text-muted leading-relaxed">Carregando briefing…</p>
+            <p className="text-[14px] text-muted leading-relaxed">Loading patterns...</p>
           )}
         </div>
 

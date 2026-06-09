@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase'
 import Image from 'next/image'
+import GritRing from '@/components/GritRing'
 
 export default function Home() {
   const [phase, setPhase] = useState<'splash' | 'auth'>('splash')
@@ -98,27 +99,16 @@ export default function Home() {
 
   if (checking || phase === 'splash') {
     return (
-      <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-bg">
-        {/* Glow ambiente — respira sutilmente */}
-        <div
-          aria-hidden
-          className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[640px] h-[640px] rounded-full pointer-events-none animate-breath"
-          style={{
-            background:
-              'radial-gradient(circle, rgba(184,255,207,0.10) 0%, rgba(184,255,207,0.03) 38%, transparent 72%)',
-            filter: 'blur(20px)',
-          }}
+      <main className="min-h-screen flex flex-col items-center justify-center relative overflow-hidden bg-black">
+        {/* Grit Ring completo como splash art */}
+        <GritRing
+          score={100}
+          size={180}
+          label=""
+          hideScore
+          hideHalo
+          className="relative inline-block animate-fade-in"
         />
-
-        {/* Logo: fade-in lento */}
-        <div className="relative z-10 animate-fade-in" style={{ animationDuration: '2s' }}>
-          <div
-            className="relative"
-            style={{ width: 96, height: 96, filter: 'drop-shadow(0 0 24px rgba(184,255,207,0.25))' }}
-          >
-            <Image src="/logo-symbol.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
-          </div>
-        </div>
 
         {/* Tagline com fade ainda mais lento */}
         <div
@@ -136,8 +126,8 @@ export default function Home() {
       <div className="ambient-glow opacity-60" />
 
       <div className="relative z-10 flex justify-center mb-14">
-        <div className="relative" style={{ width: 148, height: 56 }}>
-          <Image src="/logo-full.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
+        <div className="relative" style={{ width: 72, height: 28 }}>
+          <Image src="/logo-text.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
         </div>
       </div>
 
@@ -245,7 +235,7 @@ export default function Home() {
                 disabled={loading}
                 className="btn btn-primary w-full mt-2"
               >
-                {loading ? 'Carregando…' : isSignUp ? 'Criar conta' : 'Entrar'}
+                {loading ? 'Loading patterns...' : isSignUp ? 'Criar conta' : 'Entrar'}
                 {!loading && <span aria-hidden>→</span>}
               </button>
             </form>

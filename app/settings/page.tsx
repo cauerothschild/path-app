@@ -208,6 +208,7 @@ export default function SettingsPage() {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-4 text-muted">
         <div className="w-32 text-primary/70"><WavePath variant="loader" /></div>
+        <div className="eyebrow text-subtle">Loading patterns...</div>
       </div>
     )
   }

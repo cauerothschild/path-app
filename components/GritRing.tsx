@@ -5,6 +5,9 @@ interface Props {
   delta?: number
   size?: number
   label?: string
+  hideScore?: boolean
+  hideHalo?: boolean
+  className?: string
 }
 
 /**
@@ -21,6 +24,9 @@ export default function GritRing({
   delta = 0,
   size = 240,
   label = 'GRIT',
+  hideScore = false,
+  hideHalo = false,
+  className,
 }: Props) {
   const stroke = 3.5
   const radius = (size - stroke - 8) / 2
@@ -33,19 +39,21 @@ export default function GritRing({
 
   return (
     <div
-      className="relative inline-block animate-fade-up"
+      className={className ?? 'relative inline-block animate-fade-up'}
       style={{ width: size, height: size }}
     >
       {/* Halo externo */}
-      <div
-        aria-hidden
-        className="absolute inset-0 rounded-full pointer-events-none animate-breath"
-        style={{
-          background:
-            'radial-gradient(circle, rgba(184,255,207,0.18) 0%, rgba(184,255,207,0.04) 40%, transparent 70%)',
-          filter: 'blur(14px)',
-        }}
-      />
+      {!hideHalo && (
+        <div
+          aria-hidden
+          className="absolute inset-0 rounded-full pointer-events-none animate-breath"
+          style={{
+            background:
+              'radial-gradient(circle, rgba(184,255,207,0.18) 0%, rgba(184,255,207,0.04) 40%, transparent 70%)',
+            filter: 'blur(14px)',
+          }}
+        />
+      )}
 
       <svg
         width={size}
@@ -94,15 +102,17 @@ export default function GritRing({
 
       {/* Centro */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <div
-          className="tabular font-extralight text-ink leading-none"
-          style={{
-            fontSize: size * 0.32,
-            letterSpacing: '-0.04em',
-          }}
-        >
-          {score}
-        </div>
+        {!hideScore && (
+          <div
+            className="tabular font-extralight text-ink leading-none"
+            style={{
+              fontSize: size * 0.32,
+              letterSpacing: '-0.04em',
+            }}
+          >
+            {score}
+          </div>
+        )}
         <div className="eyebrow text-muted mt-3">{label}</div>
         {delta !== 0 && (
           <div className="absolute bottom-[16%] text-[11px] text-primary tabular tracking-wide">

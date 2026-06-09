@@ -72,7 +72,7 @@ export default function InsightsScreen() {
         <div className="w-32 text-primary/70">
           <WavePath variant="loader" />
         </div>
-        <div className="eyebrow text-subtle">Analisando padrões…</div>
+        <div className="eyebrow text-subtle">Loading patterns...</div>
       </div>
     )
   }
