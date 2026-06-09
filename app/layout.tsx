@@ -4,14 +4,23 @@ import type { Metadata, Viewport } from 'next'
 export const metadata: Metadata = {
   title: 'Path',
   description: 'Sistema inteligente de performance pessoal.',
+  manifest: '/manifest.webmanifest',
+  appleWebApp: {
+    capable: true,
+    title: 'Path',
+    statusBarStyle: 'black-translucent',
+    startupImage: '/logo-symbol.png',
+  },
   icons: {
     icon: '/logo-symbol.png',
-    apple: '/logo-symbol.png',
+    apple: [
+      { url: '/logo-symbol.png', sizes: '180x180', type: 'image/png' },
+    ],
   },
 }
 
 export const viewport: Viewport = {
-  themeColor: '#0a1614',
+  themeColor: '#020f0a',
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,

@@ -52,7 +52,7 @@ export default function BottomNav() {
   const pathname = usePathname()
 
   return (
-    <nav className="sticky bottom-0 left-0 right-0 z-20 bg-bg/80 backdrop-blur-xl">
+    <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] z-50 bg-bg/90 backdrop-blur-xl">
       {/* Hairline top */}
       <div className="hairline" />
       <div

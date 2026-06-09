@@ -51,7 +51,7 @@ function generateDemoData(): DemoCheckIn[] {
   today.setHours(0, 0, 0, 0);
 
   // Gera 14 dias para trás
-  for (let i = 13; i >= 0; i--) {
+  for (let i = 29; i >= 0; i--) {
     const date = new Date(today);
     date.setDate(date.getDate() - i);
     const dateStr = date.toISOString().split("T")[0];
