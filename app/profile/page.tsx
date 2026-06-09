@@ -151,73 +151,64 @@ export default function ProfilePage() {
   }
 
   async function saveHabit() {
-    console.log('[SAVE CLICKED]')
-    if (!userId) { console.warn('[SAVE] userId is empty'); return }
+    if (!userId) { setSaveError('Sessão expirada. Recarregue a página.'); return }
     if (!editName.trim()) return
 
     setSaving(true)
     setSaveError('')
     setSaveSuccess(false)
 
-    const windowValue = getWindowValue()
-    console.log('[SAVE DATA]', { habitId: habit?.id, userId, name: editName.trim(), window: windowValue, days: editDays })
+    try {
+      const windowValue = getWindowValue()
+      let savedHabit: Habit | null = null
 
-    let savedHabit: Habit | null = null
+      if (habit) {
+        const { data: result, error } = await supabase
+          .from('habits')
+          .update({ name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue })
+          .eq('id', habit.id)
+          .eq('user_id', userId)
+          .select()
+          .single()
 
-    if (habit) {
-      // UPDATE existing habit — only guaranteed columns first
-      const { data: result, error } = await supabase
-        .from('habits')
-        .update({ name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue })
-        .eq('id', habit.id)
-        .eq('user_id', userId)
-        .select()
-        .single()
+        if (error) throw new Error(error.message)
+        if (!result) throw new Error('Nenhuma linha atualizada. Verifique as permissões do banco.')
+        savedHabit = result as Habit
+      } else {
+        const { data: result, error } = await supabase
+          .from('habits')
+          .insert({ user_id: userId, name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue, active: true, target_duration_min: 30 })
+          .select()
+          .single()
 
-      console.log('[SUPABASE UPDATE]', { error, result })
-
-      if (error) {
-        setSaveError(error.message)
-        setSaving(false)
-        return
+        if (error) throw new Error(error.message)
+        if (!result) throw new Error('Falha ao criar hábito.')
+        savedHabit = result as Habit
       }
-      savedHabit = result as Habit
-    } else {
-      // INSERT new habit — table was empty
-      const { data: result, error } = await supabase
-        .from('habits')
-        .insert({ user_id: userId, name: editName.trim(), schedule_time: windowValue, preferred_time: windowValue, active: true, target_duration_min: 30 })
-        .select()
-        .single()
 
-      console.log('[SUPABASE INSERT]', { error, result })
+      // Tenta salvar target_days separadamente (falha silenciosa se coluna não existir)
+      if (savedHabit?.id) {
+        const { error: daysErr } = await supabase
+          .from('habits')
+          .update({ target_days: editDays })
+          .eq('id', savedHabit.id)
+          .eq('user_id', userId)
 
-      if (error) {
-        setSaveError(error.message)
-        setSaving(false)
-        return
+        setHabit({ ...savedHabit, schedule_time: windowValue, target_days: daysErr ? null : editDays })
+      } else {
+        setHabit(savedHabit)
       }
-      savedHabit = result as Habit
+
+      setSaveSuccess(true)
+      setTimeout(() => {
+        setEditing(false)
+        setSaveSuccess(false)
+      }, 900)
+    } catch (err: unknown) {
+      setSaveError(err instanceof Error ? err.message : 'Erro desconhecido ao salvar.')
+    } finally {
+      setSaving(false)
     }
-
-    // Tenta salvar target_days separadamente (falha silenciosa se coluna não existir)
-    const { error: daysErr } = await supabase
-      .from('habits')
-      .update({ target_days: editDays })
-      .eq('id', savedHabit.id)
-      .eq('user_id', userId)
-
-    if (daysErr) {
-      console.warn('[target_days — rode o ALTER TABLE no Supabase]', daysErr.message)
-    }
-
-    setHabit({ ...savedHabit, schedule_time: windowValue, target_days: daysErr ? null : editDays })
-    setSaveSuccess(true)
-    setSaving(false)
-    setTimeout(() => {
-      setEditing(false)
-      setSaveSuccess(false)
-    }, 900)
   }
 
   async function logout() {
@@ -407,7 +398,7 @@ export default function ProfilePage() {
       {editing && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end">
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={cancelEdit} />
-          <div className="relative bg-[#0d1a19] border-t border-border rounded-t-3xl p-6 space-y-5 max-h-[85vh] overflow-y-auto">
+          <div className="relative bg-[#0d1a19] border-t border-border rounded-t-3xl p-6 pb-28 space-y-5 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-1">
               <h2 className="text-lg font-light text-ink">Editar comportamento</h2>
               <button onClick={cancelEdit} className="text-muted hover:text-ink transition p-1">

@@ -9,12 +9,12 @@ export const metadata: Metadata = {
     capable: true,
     title: 'Path',
     statusBarStyle: 'black-translucent',
-    startupImage: '/logo-symbol.png',
+    startupImage: '/logo-circle.png',
   },
   icons: {
-    icon: '/logo-symbol.png',
+    icon: '/logo-circle.png',
     apple: [
-      { url: '/logo-symbol.png', sizes: '180x180', type: 'image/png' },
+      { url: '/logo-circle.png', sizes: '180x180', type: 'image/png' },
     ],
   },
 }

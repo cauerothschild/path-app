@@ -302,8 +302,9 @@ export default function CheckInScreen() {
 
       {/* Header */}
       <header className="relative z-10 px-6 pt-6 pb-4">
+        <div className="hairline mb-4" />
         <div className="eyebrow mb-1">{noHabitDay ? 'Contexto diário' : 'Check-in diário'}</div>
-        <p className="text-[13px] text-muted">{noHabitDay ? 'Observação passiva' : habitName}</p>
+        <h1 className="text-xl font-light text-ink">{noHabitDay ? 'Observação passiva' : habitName}</h1>
         {currentDot >= 0 && (
           <div className="flex gap-1.5 mt-4">
             {Array.from({ length: totalDots }, (_, i) => i).map(i => (

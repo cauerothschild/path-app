@@ -110,28 +110,21 @@ export default function Home() {
           className="relative inline-block animate-fade-in"
         />
 
-        {/* Tagline com fade ainda mais lento */}
-        <div
-          className="absolute bottom-12 eyebrow text-subtle animate-fade-in"
-          style={{ animationDuration: '2s', animationDelay: '0.6s' }}
-        >
-          Learning your patterns
-        </div>
       </main>
     )
   }
 
   return (
-    <main className="min-h-screen flex flex-col px-7 py-14 relative overflow-hidden">
+    <main className="min-h-screen flex flex-col px-7 pt-10 pb-8 relative overflow-hidden">
       <div className="ambient-glow opacity-60" />
 
-      <div className="relative z-10 flex justify-center mb-14">
+      <div className="relative z-10 flex justify-center mb-8">
         <div className="relative" style={{ width: 72, height: 28 }}>
           <Image src="/logo-text.png" alt="Path" fill className="object-contain mix-blend-screen" priority />
         </div>
       </div>
 
-      <div className="relative z-10 flex-1 flex flex-col justify-center max-w-sm w-full mx-auto animate-fade-up">
+      <div className="relative z-10 flex-1 flex flex-col justify-start max-w-sm w-full mx-auto animate-fade-up">
         <div className="eyebrow mb-5">{isForgot ? 'Recuperar senha' : isSignUp ? 'Criar conta' : 'Entrar'}</div>
         <h1 className="headline-lg mb-6">Você não falha aleatoriamente.</h1>
         <p className="body mb-10 text-muted">
