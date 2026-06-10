@@ -12,25 +12,13 @@ export default function manifest(): MetadataRoute.Manifest {
     background_color: '#020f0a',
     icons: [
       {
-        src: '/logo-circle.png',
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'any',
-      },
-      {
-        src: '/logo-circle.png',
-        sizes: '192x192',
-        type: 'image/png',
-        purpose: 'maskable',
-      },
-      {
-        src: '/logo-circle.png',
+        src: '/icon',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'any',
       },
       {
-        src: '/logo-circle.png',
+        src: '/icon',
         sizes: '512x512',
         type: 'image/png',
         purpose: 'maskable',
