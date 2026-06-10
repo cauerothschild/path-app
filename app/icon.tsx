@@ -7,7 +7,7 @@ export const contentType = 'image/png'
 export default function Icon() {
   const S = 512
   const stroke = 14
-  const r = (S - stroke - 32) / 2
+  const r = (S - stroke - 160) / 2
   const cx = S / 2
   const circumference = 2 * Math.PI * r
 
